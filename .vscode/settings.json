@@ -8,7 +8,7 @@
     },
     "idf.espIdfPath": "/home/teriyakigod/esp/v5.2.1/esp-idf",
     "idf.openOcdConfigs": [
-        "board/esp32-wrover-kit-3.3v.cfg"
+        "board/esp32-bridge.cfg"
     ],
     "idf.port": "/dev/ttyUSB0",
     "idf.pythonBinPath": "/home/teriyakigod/.espressif/python_env/idf5.2_py3.10_env/bin/python",
