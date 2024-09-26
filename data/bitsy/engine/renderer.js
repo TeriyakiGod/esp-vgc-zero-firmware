@@ -1,5 +1,7 @@
-function TileRenderer(debugName) {
-bitsy.log("!!!!! NEW TILE RENDERER: " + debugName);
+function TileRenderer(tilesize) {
+// todo : do I need to pass in tilesize? or can I use the global value?
+
+bitsyLog("!!!!! NEW TILE RENDERER");
 
 var drawingCache = {
 	source: {},
@@ -14,10 +16,9 @@ function createRenderCacheId(drawingId, colorIndex) {
 
 function renderDrawing(drawing) {
 	// debugRenderCount++;
-	// bitsy.log("RENDER COUNT " + debugRenderCount);
+	// bitsyLog("RENDER COUNT " + debugRenderCount);
 
 	var col = drawing.col;
-	var bgc = drawing.bgc;
 	var drwId = drawing.drw;
 	var drawingFrames = drawingCache.source[drwId];
 
@@ -30,27 +31,33 @@ function renderDrawing(drawing) {
 
 	for (var i = 0; i < drawingFrames.length; i++) {
 		var frameData = drawingFrames[i];
-		var frameTileId = renderTileFromDrawingData(frameData, col, bgc);
+		var frameTileId = renderTileFromDrawingData(frameData, col);
 		drawingCache.render[cacheId].push(frameTileId);
 	}
 }
 
-function renderTileFromDrawingData(drawingData, col, bgc) {
-	var tileId = bitsy.tile();
+function renderTileFromDrawingData(drawingData, col) {
+	var tileId = bitsyAddTile();
 
-	var backgroundColor = tileColorStartIndex + bgc;
+	var backgroundColor = tileColorStartIndex + 0;
 	var foregroundColor = tileColorStartIndex + col;
 
-	bitsy.fill(tileId, backgroundColor);
+	bitsyDrawBegin(tileId);
 
-	for (var y = 0; y < bitsy.TILE_SIZE; y++) {
-		for (var x = 0; x < bitsy.TILE_SIZE; x++) {
+	for (var y = 0; y < tilesize; y++) {
+		for (var x = 0; x < tilesize; x++) {
 			var px = drawingData[y][x];
+
 			if (px === 1) {
-				bitsy.set(tileId, (y * bitsy.TILE_SIZE) + x, foregroundColor);
+				bitsyDrawPixel(foregroundColor, x, y);
+			}
+			else {
+				bitsyDrawPixel(backgroundColor, x, y);
 			}
 		}
 	}
+
+	bitsyDrawEnd();
 
 	return tileId;
 }
@@ -86,67 +93,35 @@ function getDrawingFrameTileId(drawing, frameOverride) {
 }
 
 function getOrRenderDrawingFrame(drawing, frameOverride) {
-	// bitsy.log("frame render: " + drawing.type + " " + drawing.id + " f:" + frameOverride);
+	// bitsyLog("frame render: " + drawing.type + " " + drawing.id + " f:" + frameOverride);
 
 	if (!isDrawingRendered(drawing)) {
-		bitsy.log("frame render: doesn't exist " + drawing.id);
+		// bitsyLog("frame render: doesn't exist");
 		renderDrawing(drawing);
 	}
 
 	return getDrawingFrameTileId(drawing, frameOverride);
 }
 
-function deleteRenders(drawingId) {
-	for (var cacheId in drawingCache.render) {
-		if (cacheId.indexOf(drawingId) === 0) {
-			var tiles = drawingCache.render[cacheId];
-			for (var i = 0; i < tiles.length; i++) {
-				bitsy.delete(tiles[i]);
-			}
-			delete drawingCache.render[cacheId];
-		}
-	}
-}
-
 /* PUBLIC INTERFACE */
 this.GetDrawingFrame = getOrRenderDrawingFrame;
 
-// todo : leave individual get and set stuff for now - should I remove later?
-// todo : better name for function?
-this.SetDrawings = function(drawingSource) {
-	drawingCache.source = drawingSource;
-	// need to reset entire render cache when all the drawings are changed
-	drawingCache.render = {};
-};
-
 this.SetDrawingSource = function(drawingId, drawingData) {
-	deleteRenders(drawingId);
 	drawingCache.source[drawingId] = drawingData;
-};
+	// TODO : reset render cache for this image
+}
 
 this.GetDrawingSource = function(drawingId) {
 	return drawingCache.source[drawingId];
-};
+}
 
 this.GetFrameCount = function(drawingId) {
 	return drawingCache.source[drawingId].length;
-};
+}
 
-// todo : forceReset option is hacky?
-this.ClearCache = function(forceReset) {
-	if (forceReset === undefined || forceReset === true) {
-		// delete all tiles from system memory before clearing the cache
-		for (var cacheId in drawingCache.render) {
-			var tiles = drawingCache.render[cacheId];
-			for (var i = 0; i < tiles.length; i++) {
-				bitsy.delete(tiles[i]);
-			}
-		}
-	}
-
+this.ClearCache = function() {
+	bitsyResetTiles();
 	drawingCache.render = {};
-};
-
-this.deleteDrawing = deleteRenders;
+}
 
 } // Renderer()

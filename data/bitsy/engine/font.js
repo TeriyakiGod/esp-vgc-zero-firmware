@@ -50,8 +50,6 @@ this.Get = function(fontName) {
 }
 
 function Font(fontData) {
-	bitsy.log("create font");
-
 	var name = "unknown";
 	var width = 6; // default size so if you have NO font or an invalid font it displays boxes
 	var height = 8;
@@ -134,31 +132,21 @@ function Font(fontData) {
 			return;
 		}
 
-		bitsy.log("split font lines");
-		// NOTE: this is where we run out of memory - split creates a lot of memory issues
-		// var lines = fontData.split("\n");
-		bitsy.log("after split lines");
+		var lines = fontData.split("\n");
 
 		var isReadingChar = false;
 		var isReadingCharProperties = false;
 		var curCharLineCount = 0;
 		var curCharCode = 0;
 
-		var lineStart = 0;
-		var lineEnd = fontData.indexOf("\n", lineStart) != -1
-			? fontData.indexOf("\n", lineStart)
-			: fontData.length;
-
-		// for (var i = 0; i < lines.length; i++) {
-		// 	var line = lines[i];
-		while (lineStart < fontData.length) {
-			var line = fontData.substring(lineStart, lineEnd);
-			// bitsy.log("parse font xx " + line);
+		for (var i = 0; i < lines.length; i++) {
+			var line = lines[i];
 
 			if (line[0] === "#") {
-				// skip comment lines
+				continue; // skip comment lines
 			}
-			else if (!isReadingChar) {
+
+			if (!isReadingChar) {
 				// READING NON CHARACTER DATA LINE
 				var args = line.split(" ");
 				if (args[0] == "FONT") {
@@ -214,26 +202,18 @@ function Font(fontData) {
 					}
 
 					curCharLineCount++;
-					if (curCharLineCount >= chardata[curCharCode].height) {
+					if (curCharLineCount >= height) {
 						isReadingChar = false;
 					}
 				}
 			}
-
-			lineStart = lineEnd + 1;
-			lineEnd = fontData.indexOf("\n", lineStart) != -1
-				? fontData.indexOf("\n", lineStart)
-				: fontData.length;
 		}
 
 		// re-init invalid character box at the actual font size once it's loaded
 		updateInvalidCharData();
 	}
 
-	bitsy.log("parse font");
 	parseFont(fontData);
-
-	bitsy.log("create font");
 }
 
 } // FontManager

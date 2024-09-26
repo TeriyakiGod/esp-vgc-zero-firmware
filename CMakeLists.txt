@@ -7,8 +7,4 @@ project(esp-vgc-zero-firmware)
 
 set(EXTRA_COMPONENT_DIRS components)
 
-add_custom_target(flash_data ALL
-    COMMAND ${CMAKE_SOURCE_DIR}/scripts/flash_data.sh
-    COMMENT "Packaging and flashing data folder to ESP32"
-    VERBATIM
-)
+fatfs_create_spiflash_image(storage data FLASH_IN_PROJECT)
