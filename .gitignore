@@ -3,3 +3,10 @@ sdkconfig
 sdkconfig.old
 .vscode
 .devcontainer
+managed_components/
+
+*.log
+*.tmp
+*.bak
+*.swp
+.DS_Store
