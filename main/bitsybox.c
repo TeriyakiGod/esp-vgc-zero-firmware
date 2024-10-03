@@ -1,21 +1,16 @@
+#include "bitsybox.h"
 #include <stdio.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_heap_caps.h"
-#include "esp_log.h"
 #include "duktape.h"
-#include "esp_vfs_fat.h"
+#include "esp_log.h"
 #include "esp_system.h"
-#include "nvs_flash.h"
-#include <sys/stat.h>
-#include <dirent.h>
-#include <inttypes.h>
 #include "esp_timer.h"
+#include "esp_heap_caps.h"
+#include "freertos/FreeRTOS.h"
 
 #define SYSTEM_PALETTE_MAX 256
 #define SYSTEM_DRAWING_BUFFER_MAX 1024
 
-static const char *TAG = "vgc_firmware";
+static const char *TAG = "BitsyBox";
 
 /* GAME SELECT */
 char gameFilePath[256];
@@ -28,10 +23,6 @@ int roomSize = 16;
 
 int shouldContinue = 1;
 
-/* GRAPHICS */
-// RGB565
-// typedef uint16_t Color;
-
 typedef struct Color
 {
     uint8_t r;
@@ -39,12 +30,10 @@ typedef struct Color
     uint8_t b;
 } Color;
 
-Color *drawingBufferColors[SYSTEM_DRAWING_BUFFER_MAX];
-
 int curGraphicsMode = 0;
 Color systemPalette[SYSTEM_PALETTE_MAX];
-int curBufferId = -1;
 
+int curBufferId = -1;
 int screenBufferId = 0;
 int textboxBufferId = 1;
 int tileStartBufferId = 2;
@@ -52,9 +41,6 @@ int nextBufferId = 2;
 
 int textboxWidth = 0;
 int textboxHeight = 0;
-
-int windowWidth = 0;
-int windowHeight = 0;
 
 /* INPUT */
 int isButtonUp = 0;
@@ -82,6 +68,12 @@ int isButtonPadB = 0;
 int isButtonPadX = 0;
 int isButtonPadY = 0;
 int isButtonPadStart = 0;
+
+typedef enum
+{
+    FILETYPE_SCRIPT,
+    FILETYPE_FILE
+} filetype_t;
 
 static duk_ret_t duk_print(duk_context *ctx)
 {
@@ -117,16 +109,11 @@ static void duk_fatal_error(void *udata, const char *msg)
     ESP_LOGE(TAG, "Fatal error: %s", msg);
 }
 
-static void log_mem(){
+static void log_mem()
+{
     ESP_LOGI(TAG, "PSRAM left %d KB", heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024);
     ESP_LOGI(TAG, "RAM left %" PRIu32 " KB", (esp_get_free_heap_size() - heap_caps_get_free_size(MALLOC_CAP_SPIRAM)) / 1024);
 }
-
-typedef enum
-{
-    FILETYPE_SCRIPT,
-    FILETYPE_FILE
-} filetype_t;
 
 bool load(duk_context *ctx, const char *filepath, filetype_t type, const char *variableName)
 {
@@ -156,13 +143,17 @@ bool load(duk_context *ctx, const char *filepath, filetype_t type, const char *v
 
             // ensure null terminator
             fileBuffer[length] = '\0';
-        } else {
+        }
+        else
+        {
             ESP_LOGE(TAG, "Failed to allocate memory for file: %s", filepath);
             success = false;
         }
 
         fclose(f);
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "Failed to open file: %s", filepath);
         success = false;
     }
@@ -212,8 +203,8 @@ bool duk_load_bitsy_engine(duk_context *ctx)
 
     for (int i = 0; i < sizeof(scripts) / sizeof(scripts[0]); i++)
     {
-        //log_mem();
-        // Load scripts
+        // log_mem();
+        //  Load scripts
         if (!load(ctx, scripts[i], FILETYPE_SCRIPT, NULL))
         {
             ESP_LOGE(TAG, "Failed to load script: %s", scripts[i]);
@@ -330,7 +321,7 @@ duk_ret_t bitsyDrawPixel(duk_context *ctx)
 
     // Color color = systemPalette[paletteIndex];
 
-    //tft.drawPixel(x, y, tft.color565(color.r, color.g, color.b));
+    // tft.drawPixel(x, y, tft.color565(color.r, color.g, color.b));
 
     return 0;
 }
@@ -353,7 +344,7 @@ duk_ret_t bitsyDrawTile(duk_context *ctx)
     // }
 
     // Copy sprite from drawingBuffers
-    //drawingBuffers[tileId]->pushSprite(x, y);
+    // drawingBuffers[tileId]->pushSprite(x, y);
 
     return 0;
 }
@@ -369,7 +360,7 @@ duk_ret_t bitsyDrawTextbox(duk_context *ctx)
     // int y = duk_get_int(ctx, 1);
 
     // Copy textbox buffer to screen buffer
-    //drawingBuffers[1]->pushSprite(x, y);
+    // drawingBuffers[1]->pushSprite(x, y);
 
     return 0;
 }
@@ -512,94 +503,112 @@ void register_bitsy_api(duk_context *ctx)
     duk_put_global_string(ctx, "bitsyOnUpdate");
 }
 
-void gameLoop(duk_context *ctx){
-	// loop time
+void gameLoop(duk_context *ctx)
+{
+    // loop time
 
-	int64_t prevTime = esp_timer_get_time();
-	int64_t currentTime = 0;
-	int64_t deltaTime = 0;
-	int64_t loopTime = 0;
-	const int64_t loopTimeMax = 16000;  // 16 ms for ~60fps
+    int64_t prevTime = esp_timer_get_time();
+    int64_t currentTime = 0;
+    int64_t deltaTime = 0;
+    int64_t loopTime = 0;
+    const int64_t loopTimeMax = 16000; // 16 ms for ~60fps
 
-	int isGameOver = 0;
+    int isGameOver = 0;
 
-	duk_peval_string(ctx, "var __bitsybox_is_game_over__ = false;");
-	duk_pop(ctx);
+    duk_peval_string(ctx, "var __bitsybox_is_game_over__ = false;");
+    duk_pop(ctx);
 
-	// main loop
-	if (duk_peval_string(ctx, "__bitsybox_on_load__(__bitsybox_game_data__, __bitsybox_default_font__);") != 0) {
-		printf("Load Bitsy Error: %s\n", duk_safe_to_string(ctx, -1));
-	}
-	duk_pop(ctx);
+    // main loop
+    if (duk_peval_string(ctx, "__bitsybox_on_load__(__bitsybox_game_data__, __bitsybox_default_font__);") != 0)
+    {
+        printf("Load Bitsy Error: %s\n", duk_safe_to_string(ctx, -1));
+    }
+    duk_pop(ctx);
 
-	if (gameCount > 1) {
-		// hack to return to main menu on game end if there's more than one
-		duk_peval_string(ctx, "reset_cur_game = function() { __bitsybox_is_game_over__ = true; };");
-		duk_pop(ctx);
-	}
+    if (gameCount > 1)
+    {
+        // hack to return to main menu on game end if there's more than one
+        duk_peval_string(ctx, "reset_cur_game = function() { __bitsybox_is_game_over__ = true; };");
+        duk_pop(ctx);
+    }
 
-	while (shouldContinue && !isGameOver) {
+    while (shouldContinue && !isGameOver)
+    {
         // Get current time
-		currentTime = esp_timer_get_time();
-		// Calculate delta time in microseconds
-		deltaTime = currentTime - prevTime;
-		prevTime = currentTime;
+        currentTime = esp_timer_get_time();
+        // Calculate delta time in microseconds
+        deltaTime = currentTime - prevTime;
+        prevTime = currentTime;
         loopTime += deltaTime;
 
-		// printf("dt %d\n", deltaTime); // debug frame rate
+        // printf("dt %d\n", deltaTime); // debug frame rate
 
-		// Get INPUT
+        // Get INPUT
 
-		if (loopTime >= loopTimeMax && shouldContinue) {
-			Color bg = systemPalette[0];
+        if (loopTime >= loopTimeMax && shouldContinue)
+        {
+            Color bg = systemPalette[0];
 
-			// main loop
-			if (duk_peval_string(ctx, "__bitsybox_on_update__();") != 0) {
-				printf("Update Bitsy Error: %s\n", duk_safe_to_string(ctx, -1));
-			}
-			duk_pop(ctx);
+            // main loop
+            if (duk_peval_string(ctx, "__bitsybox_on_update__();") != 0)
+            {
+                printf("Update Bitsy Error: %s\n", duk_safe_to_string(ctx, -1));
+            }
+            duk_pop(ctx);
 
-			// Draw the screen
+            // Draw the screen
 
-			loopTime = 0;
-		}
+            loopTime = 0;
+        }
 
-		// kind of hacky way to trigger restart
-		// if (duk_peval_string(ctx, "if (bitsyGetButton(5)) { reset_cur_game(); }") != 0) {
-		// 	printf("Test Restart Game Error: %s\n", duk_safe_to_string(ctx, -1));
-		// }
-		// duk_pop(ctx);
+        // kind of hacky way to trigger restart
+        // if (duk_peval_string(ctx, "if (bitsyGetButton(5)) { reset_cur_game(); }") != 0) {
+        // 	printf("Test Restart Game Error: %s\n", duk_safe_to_string(ctx, -1));
+        // }
+        // duk_pop(ctx);
 
-		if (duk_peval_string(ctx, "__bitsybox_is_game_over__") != 0) {
-			printf("Test Game Over Error: %s\n", duk_safe_to_string(ctx, -1));
-		}
-		isGameOver = duk_get_boolean(ctx, -1);
-		duk_pop(ctx);
-	}
+        if (duk_peval_string(ctx, "__bitsybox_is_game_over__") != 0)
+        {
+            printf("Test Game Over Error: %s\n", duk_safe_to_string(ctx, -1));
+        }
+        isGameOver = duk_get_boolean(ctx, -1);
+        duk_pop(ctx);
+    }
 
-	if (duk_peval_string(ctx, "__bitsybox_on_quit__();") != 0) {
-		printf("Quit Bitsy Error: %s\n", duk_safe_to_string(ctx, -1));
-	}
-	duk_pop(ctx);
+    if (duk_peval_string(ctx, "__bitsybox_on_quit__();") != 0)
+    {
+        printf("Quit Bitsy Error: %s\n", duk_safe_to_string(ctx, -1));
+    }
+    duk_pop(ctx);
 }
 
-void run_bitsy_duktape(void)
+void app_duktape_bitsy()
 {
     // Initialize system palette
     systemPalette[0] = (Color){255, 0, 0}; // Red
     systemPalette[1] = (Color){0, 255, 0}; // Green
     systemPalette[2] = (Color){0, 0, 255}; // Blue
 
-    // Initialize TFT display
-    // tft.init();
-    // tft.setRotation(0);
-    // tft.fillScreen(TFT_BLACK);
+    //lv_obj_t *scr = lv_scr_act();
 
-    // // Set up initial drawing buffers
-    // drawingBuffers[0] = new TFT_eSprite(&tft);
-    // drawingBuffers[0]->createSprite(screenSize, screenSize);
-    // drawingBuffers[1] = new TFT_eSprite(&tft);
-    // drawingBuffers[1]->createSprite(textboxWidth, textboxHeight);
+    /* Task lock */
+    //lvgl_port_lock(0);
+
+    // Set up initial drawing buffers
+    // LV_DRAW_BUF_DEFINE_STATIC(draw_buf_16bpp, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, LV_COLOR_FORMAT_RGB565);
+    // LV_DRAW_BUF_INIT_STATIC(draw_buf_16bpp);
+    //drawingBuffers[0] = lv_draw_buf_create(screenSize, screenSize, LV_COLOR_FORMAT_RGB565, 0);
+    //drawingBuffers[1] = lv_draw_buf_create(textboxWidth, textboxHeight, LV_COLOR_FORMAT_RGB565, 0);
+
+
+    // Create canvas
+    // canvas = lv_canvas_create(scr);
+    // lv_canvas_set_draw_buf(canvas, &drawingBuffers[0]);
+    // lv_obj_center(canvas);
+    // lv_canvas_fill_bg(canvas, lv_color_black(), LV_OPA_COVER);
+
+    /* Task unlock */
+    //lvgl_port_unlock();
 
     duk_context *ctx = NULL;
     ctx = duk_create_heap(duk_psram_alloc, duk_psram_realloc, duk_psram_free, NULL, duk_fatal_error);
@@ -651,50 +660,4 @@ void run_bitsy_duktape(void)
     duk_destroy_heap(ctx);
 
     ESP_LOGI(TAG, "Duktape heap destroyed and program completed.");
-}
-
-void app_bitsybox(void)
-{
-    // Initialize NVS
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
-        // NVS partition was truncated and needs to be erased
-        // Retry nvs_flash_init
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(err);
-
-    // Mount configuration
-    const esp_vfs_fat_mount_config_t mount_config = {
-        .format_if_mount_failed = true,
-        .max_files = 5,
-        .allocation_unit_size = CONFIG_WL_SECTOR_SIZE};
-
-    // Declare the wear leveling handle
-    wl_handle_t s_wl_handle;
-
-    // Mount FAT filesystem with wear leveling
-    err = esp_vfs_fat_spiflash_mount_rw_wl("/spiflash", "storage", &mount_config, &s_wl_handle);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to mount FATFS (%s)", esp_err_to_name(err));
-        return;
-    }
-
-    // Run bitsy engine
-    run_bitsy_duktape();
-
-    // Unmount FAT filesystem
-    err = esp_vfs_fat_spiflash_unmount_rw_wl("/spiflash", s_wl_handle);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to unmount FATFS (%s)", esp_err_to_name(err));
-    }
-
-    // Deinitialize NVS
-    nvs_flash_deinit();
-
-    ESP_LOGI(TAG, "Program completed.");
 }
