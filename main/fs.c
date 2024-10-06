@@ -8,6 +8,9 @@
 
 static const char *TAG = "FS";
 
+/* Wear level handle */
+static wl_handle_t vgc_fs_wl_handle;
+
 esp_err_t vgc_fs_init()
 {
     // Initialize NVS
@@ -41,7 +44,7 @@ esp_err_t vgc_fs_init()
 esp_err_t vgc_fs_deinit()
 {
     // Unmount FAT filesystem
-    esp_err_t err = esp_vfs_fat_spiflash_unmount("/spiflash", vgc_fs_wl_handle);
+    esp_err_t err = esp_vfs_fat_spiflash_unmount_rw_wl("/spiflash", vgc_fs_wl_handle);
     if (err != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to unmount FATFS (%s)", esp_err_to_name(err));

@@ -12,7 +12,14 @@
 #include "esp_lcd_st7735.h"
 #include "lvgl.h"
 
-static const char *TAG = "display";
+static const char *TAG = "LCD";
+
+/* LCD IO and panel */
+static esp_lcd_panel_io_handle_t vgc_lcd_io_handle = NULL;
+static esp_lcd_panel_handle_t vgc_lcd_panel_handle = NULL;
+
+/* LVGL display and touch */
+static lv_display_t *vgc_display = NULL;
 
 esp_err_t vgc_lcd_init()
 {
@@ -53,7 +60,6 @@ esp_err_t vgc_lcd_init()
         .reset_gpio_num = EXAMPLE_LCD_GPIO_RST,
         .rgb_ele_order = EXAMPLE_LCD_ELEMENT_ORDER,
         .bits_per_pixel = EXAMPLE_LCD_BITS_PER_PIXEL,
-        .data_endian = LCD_RGB_DATA_ENDIAN_LITTLE,
     };
     ESP_GOTO_ON_ERROR(esp_lcd_new_panel_st7735(vgc_lcd_io_handle, &panel_config, &vgc_lcd_panel_handle), err, TAG, "New panel failed");
 
@@ -117,22 +123,112 @@ esp_err_t vgc_lvgl_init()
     return ESP_OK;
 }
 
+esp_err_t vgc_lcd_deinit()
+{
+    esp_err_t ret = ESP_OK;
+
+    /* LCD backlight off */
+    ESP_ERROR_CHECK(gpio_set_level(EXAMPLE_LCD_GPIO_BL, !EXAMPLE_LCD_BL_ON_LEVEL));
+
+    /* Deinitialize LCD */
+    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(vgc_lcd_panel_handle, false));
+    ESP_ERROR_CHECK(esp_lcd_panel_del(vgc_lcd_panel_handle));
+    ESP_ERROR_CHECK(esp_lcd_panel_io_del(vgc_lcd_io_handle));
+    ESP_ERROR_CHECK(spi_bus_free(EXAMPLE_LCD_SPI_NUM));
+
+    return ret;
+}
+
+esp_err_t vgc_lcd_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap)
+{
+    return esp_lcd_panel_draw_bitmap(vgc_lcd_panel_handle, x, y, w, h, bitmap);
+}
+
 esp_err_t vgc_lvgl_deinit()
 {
     return lvgl_port_remove_disp(vgc_display);
 }
 
-void vgc_display_test()
+void vgc_esp_lcd_test(){
+    uint16_t *bitmap = heap_caps_malloc(128 * 128 * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+    for (int i = 0; i < 128 * 128; i++)
+    {
+        bitmap[i] = 0xF800; // Red
+    }
+    ESP_ERROR_CHECK(vgc_lcd_draw_bitmap(0, 0, 128, 128, bitmap));
+
+    //wait
+    vTaskDelay(10000 / portTICK_PERIOD_MS);
+}
+
+void vgc_lvgl_hello_world()
 {
     // Lock
     lvgl_port_lock(0);
 
-    /* Test display */
-    lv_obj_t *scr = lv_screen_active();
-
-    lv_obj_t *label = lv_label_create(scr);
+    lv_obj_t *label = lv_label_create(lv_screen_active());
     lv_label_set_text(label, "Hello, World!");
     lv_obj_align(label, LV_ALIGN_CENTER, 0, 0);
+
+    // Unlock
+    lvgl_port_unlock();
+}
+
+void vgc_lvgl_color_test()
+{
+    // Lock
+    lvgl_port_lock(0);
+
+    // Create a canvas
+    LV_DRAW_BUF_DEFINE_STATIC(draw_buf_16bpp, 128, 128, LV_COLOR_FORMAT_RGB565);
+    LV_DRAW_BUF_INIT_STATIC(draw_buf_16bpp);
+
+    lv_obj_t *canvas = lv_canvas_create(lv_screen_active());
+    lv_canvas_set_draw_buf(canvas, &draw_buf_16bpp);
+    lv_obj_center(canvas);
+    lv_canvas_fill_bg(canvas, lv_color_black(), LV_OPA_COVER);
+
+    lv_layer_t layer;
+    lv_canvas_init_layer(canvas, &layer);
+
+    // Fill the canvas with RGB values
+    for (int y = 0; y < 128; y++)
+    {
+        for (int x = 0; x < 128; x++)
+        {
+            // Map X and Y to RGB values
+            uint8_t red = x;    // X-axis maps to Red (0-255)
+            uint8_t green = y;  // Y-axis maps to Green (0-255)
+            uint8_t blue = 128; // Constant Blue value
+
+            // Combine the RGB values into a color
+            lv_color_t color = lv_color_make(red, green, blue);
+
+            // Set the pixel at (x, y) to the corresponding RGB color
+            lv_canvas_set_px(canvas, x, y, color, LV_OPA_COVER);
+        }
+    }
+
+    // Draw a border with alternating black and white pixels
+    for (int i = 0; i < 128; i++)
+    {
+        // Alternate colors for the border
+        lv_color_t color = (i % 2 == 0) ? lv_color_black() : lv_color_white();
+
+        // Top border (y = 0)
+        lv_canvas_set_px(canvas, i, 0, color, LV_OPA_COVER);
+
+        // Bottom border (y = 127)
+        lv_canvas_set_px(canvas, i, 127, color, LV_OPA_COVER);
+
+        // Left border (x = 0)
+        lv_canvas_set_px(canvas, 0, i, color, LV_OPA_COVER);
+
+        // Right border (x = 127)
+        lv_canvas_set_px(canvas, 127, i, color, LV_OPA_COVER);
+    }
+
+    lv_canvas_finish_layer(canvas, &layer);
 
     // Unlock
     lvgl_port_unlock();

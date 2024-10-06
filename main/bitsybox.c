@@ -6,6 +6,7 @@
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
+#include "display.h"
 
 #define SYSTEM_PALETTE_MAX 256
 #define SYSTEM_DRAWING_BUFFER_MAX 1024
@@ -23,15 +24,10 @@ int roomSize = 16;
 
 int shouldContinue = 1;
 
-typedef struct Color
-{
-    uint8_t r;
-    uint8_t g;
-    uint8_t b;
-} Color;
-
 int curGraphicsMode = 0;
-Color systemPalette[SYSTEM_PALETTE_MAX];
+
+static uint16_t systemPalette[SYSTEM_PALETTE_MAX];
+static uint16_t *drawingBuffers[SYSTEM_DRAWING_BUFFER_MAX];
 
 int curBufferId = -1;
 int screenBufferId = 0;
@@ -39,8 +35,8 @@ int textboxBufferId = 1;
 int tileStartBufferId = 2;
 int nextBufferId = 2;
 
-int textboxWidth = 0;
-int textboxHeight = 0;
+int textboxWidth = 100;
+int textboxHeight = 64;
 
 /* INPUT */
 int isButtonUp = 0;
@@ -75,18 +71,10 @@ typedef enum
     FILETYPE_FILE
 } filetype_t;
 
-static duk_ret_t duk_print(duk_context *ctx)
+static void log_mem()
 {
-    int nargs = duk_get_top(ctx); // Get number of arguments
-    for (int i = 0; i < nargs; i++)
-    {
-        if (i > 0)
-        {
-            ESP_LOGI("Duktape", " "); // Print a space between arguments
-        }
-        ESP_LOGI("Duktape", "%s", duk_safe_to_string(ctx, i)); // Print each argument
-    }
-    return 0; // No return value
+    ESP_LOGI(TAG, "PSRAM left %d KB", heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024);
+    ESP_LOGI(TAG, "RAM left %" PRIu32 " KB", (esp_get_free_heap_size() - heap_caps_get_free_size(MALLOC_CAP_SPIRAM)) / 1024);
 }
 
 void *duk_psram_alloc(void *udata, duk_size_t size)
@@ -109,13 +97,7 @@ static void duk_fatal_error(void *udata, const char *msg)
     ESP_LOGE(TAG, "Fatal error: %s", msg);
 }
 
-static void log_mem()
-{
-    ESP_LOGI(TAG, "PSRAM left %d KB", heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024);
-    ESP_LOGI(TAG, "RAM left %" PRIu32 " KB", (esp_get_free_heap_size() - heap_caps_get_free_size(MALLOC_CAP_SPIRAM)) / 1024);
-}
-
-bool load(duk_context *ctx, const char *filepath, filetype_t type, const char *variableName)
+bool duk_load(duk_context *ctx, const char *filepath, filetype_t type, const char *variableName)
 {
     bool success = true;
 
@@ -205,7 +187,7 @@ bool duk_load_bitsy_engine(duk_context *ctx)
     {
         // log_mem();
         //  Load scripts
-        if (!load(ctx, scripts[i], FILETYPE_SCRIPT, NULL))
+        if (!duk_load(ctx, scripts[i], FILETYPE_SCRIPT, NULL))
         {
             ESP_LOGE(TAG, "Failed to load script: %s", scripts[i]);
             success = false;
@@ -214,7 +196,7 @@ bool duk_load_bitsy_engine(duk_context *ctx)
 
     // load font
     const char *font_path = "/spiflash/bitsy/font/ascii_small.bitsyfont";
-    if (!load(ctx, font_path, FILETYPE_FILE, "__bitsybox_default_font__"))
+    if (!duk_load(ctx, font_path, FILETYPE_FILE, "__bitsybox_default_font__"))
     {
         ESP_LOGE(TAG, "Failed to load font: %s", font_path);
         success = false;
@@ -222,7 +204,21 @@ bool duk_load_bitsy_engine(duk_context *ctx)
     return success;
 }
 
-duk_ret_t bitsyGetButton(duk_context *ctx)
+static duk_ret_t duk_print(duk_context *ctx)
+{
+    int nargs = duk_get_top(ctx); // Get number of arguments
+    for (int i = 0; i < nargs; i++)
+    {
+        if (i > 0)
+        {
+            ESP_LOGI("Duktape", " "); // Print a space between arguments
+        }
+        ESP_LOGI("Duktape", "%s", duk_safe_to_string(ctx, i)); // Print each argument
+    }
+    return 0; // No return value
+}
+
+duk_ret_t bitsy_get_button(duk_context *ctx)
 {
     int buttonCode = duk_get_int(ctx, 0);
 
@@ -263,7 +259,7 @@ duk_ret_t bitsyGetButton(duk_context *ctx)
     return 1;
 }
 
-duk_ret_t bitsyLog(duk_context *ctx)
+duk_ret_t bitsy_log(duk_context *ctx)
 {
     const char *printStr;
     printStr = duk_safe_to_string(ctx, 0);
@@ -272,42 +268,42 @@ duk_ret_t bitsyLog(duk_context *ctx)
     return 0;
 }
 
-duk_ret_t bitsySetGraphicsMode(duk_context *ctx)
+duk_ret_t bitsy_set_graphics_mode(duk_context *ctx)
 {
     curGraphicsMode = duk_get_int(ctx, 0);
 
     return 0;
 }
 
-duk_ret_t bitsySetColor(duk_context *ctx)
+duk_ret_t bitsy_set_color(duk_context *ctx)
 {
     int paletteIndex = duk_get_int(ctx, 0);
     int r = duk_get_int(ctx, 1);
     int g = duk_get_int(ctx, 2);
     int b = duk_get_int(ctx, 3);
 
-    systemPalette[paletteIndex] = (Color){r, g, b};
+    systemPalette[paletteIndex] = (r << 11) | (g << 5) | b;
 
     return 0;
 }
 
-duk_ret_t bitsyResetColors(duk_context *ctx)
+duk_ret_t bitsy_reset_colors(duk_context *ctx)
 {
     for (int i = 0; i < SYSTEM_PALETTE_MAX; i++)
     {
-        systemPalette[i] = (Color){0, 0, 0};
+        systemPalette[i] = 0;
     }
 
     return 0;
 }
 
-duk_ret_t bitsyDrawBegin(duk_context *ctx)
+duk_ret_t bitsy_draw_begin(duk_context *ctx)
 {
     curBufferId = duk_get_int(ctx, 0);
     return 0;
 }
 
-duk_ret_t bitsyDrawEnd(duk_context *ctx)
+duk_ret_t bitsy_draw_end(duk_context *ctx)
 {
     curBufferId = -1;
     return 0;
@@ -315,13 +311,11 @@ duk_ret_t bitsyDrawEnd(duk_context *ctx)
 
 duk_ret_t bitsyDrawPixel(duk_context *ctx)
 {
-    // int paletteIndex = duk_get_int(ctx, 0);
-    // int x = duk_get_int(ctx, 1);
-    // int y = duk_get_int(ctx, 2);
+    int paletteIndex = duk_get_int(ctx, 0);
+    int x = duk_get_int(ctx, 1);
+    int y = duk_get_int(ctx, 2);
 
-    // Color color = systemPalette[paletteIndex];
-
-    // tft.drawPixel(x, y, tft.color565(color.r, color.g, color.b));
+    drawingBuffers[curBufferId][y * screenSize + x] = systemPalette[paletteIndex];
 
     return 0;
 }
@@ -329,82 +323,108 @@ duk_ret_t bitsyDrawPixel(duk_context *ctx)
 duk_ret_t bitsyDrawTile(duk_context *ctx)
 {
     // can only draw tiles on the screen buffer in tile mode
-    // if (curBufferId != 0 || curGraphicsMode != 1)
-    // {
-    //     return 0;
-    // }
+    if (curBufferId != 0 || curGraphicsMode != 1)
+    {
+        return 0;
+    }
 
-    // int tileId = duk_get_int(ctx, 0);
-    // int x = duk_get_int(ctx, 1);
-    // int y = duk_get_int(ctx, 2);
+    int tileId = duk_get_int(ctx, 0);
+    int x = duk_get_int(ctx, 1);
+    int y = duk_get_int(ctx, 2);
 
-    // if (tileId < tileStartBufferId || tileId >= nextBufferId)
-    // {
-    //     return 0;
-    // }
+    if (tileId < tileStartBufferId || tileId >= nextBufferId)
+    {
+        return 0;
+    }
 
-    // Copy sprite from drawingBuffers
-    // drawingBuffers[tileId]->pushSprite(x, y);
+    // copy tile to screen buffer
+    for (int ty = 0; ty < tileSize; ty++)
+    {
+        for (int tx = 0; tx < tileSize; tx++)
+        {
+            uint16_t color = drawingBuffers[tileId][ty * tileSize + tx];
+            drawingBuffers[screenBufferId][(y + ty) * screenSize + (x + tx)] = color;
+        }
+    }
 
     return 0;
 }
 
 duk_ret_t bitsyDrawTextbox(duk_context *ctx)
 {
-    // if (curBufferId != 0 || curGraphicsMode != 1)
-    // {
-    //     return 0;
-    // }
+    if (curBufferId != 0 || curGraphicsMode != 1)
+    {
+        return 0;
+    }
 
-    // int x = duk_get_int(ctx, 0);
-    // int y = duk_get_int(ctx, 1);
+    int x = duk_get_int(ctx, 0);
+    int y = duk_get_int(ctx, 1);
 
     // Copy textbox buffer to screen buffer
-    // drawingBuffers[1]->pushSprite(x, y);
+    for (int ty = 0; ty < textboxHeight; ty++)
+    {
+        for (int tx = 0; tx < textboxWidth; tx++)
+        {
+            uint16_t color = drawingBuffers[textboxBufferId][ty * textboxWidth + tx];
+            drawingBuffers[screenBufferId][(y + ty) * screenSize + (x + tx)] = color;
+        }
+    }
 
     return 0;
 }
 
 duk_ret_t bitsyClear(duk_context *ctx)
 {
-    // int paletteIndex = duk_get_int(ctx, 0);
+    int paletteIndex = duk_get_int(ctx, 0);
 
-    // Color color = systemPalette[paletteIndex];
+    uint16_t color = systemPalette[paletteIndex];
 
-    // if (curBufferId == 0)
-    // {
-    //     // Clear the screen buffer
-    //     tft.fillScreen(tft.color565(color.r, color.g, color.b));
-    // }
-    // else if (curBufferId == 1)
-    // {
-    //     // Clear the textbox buffer
-    //     tft.fillRect(0, 0, textboxWidth, textboxHeight, tft.color565(color.r, color.g, color.b));
-    // }
-    // else if (curBufferId >= tileStartBufferId && curBufferId < nextBufferId)
-    // {
-    //     // Clear the tile buffer
-    //     tft.fillRect(0, 0, tileSize, tileSize, tft.color565(color.r, color.g, color.b));
-    // }
+    if (curBufferId == 0)
+    {
+        // Clear the screen buffer
+        for (int i = 0; i < screenSize * screenSize; i++)
+        {
+            drawingBuffers[screenBufferId][i] = color;
+        }
+    }
+    else if (curBufferId == 1)
+    {
+        // Clear the textbox buffer
+        for (int i = 0; i < textboxWidth * textboxHeight; i++)
+        {
+            drawingBuffers[textboxBufferId][i] = color;
+        }
+    }
+    else if (curBufferId >= tileStartBufferId && curBufferId < nextBufferId)
+    {
+        // Clear the tile buffer
+        for (int i = 0; i < tileSize * tileSize; i++)
+        {
+            drawingBuffers[curBufferId][i] = color;
+        }
+    }
 
     return 0;
 }
 
 duk_ret_t bitsyAddTile(duk_context *ctx)
 {
-    // if (nextBufferId >= SYSTEM_DRAWING_BUFFER_MAX)
-    // {
-    //     // todo : error handling?
-    //     return 0;
-    // }
+    if (nextBufferId >= SYSTEM_DRAWING_BUFFER_MAX)
+    {
+        // todo : error handling?
+        return 0;
+    }
 
-    // // auto newTile = new TFT_eSprite(&tft);
-    // // newTile->createSprite(tileSize, tileSize);
-    // drawingBuffers[nextBufferId] = newTile;
+    // allocate a new tile buffer
+    drawingBuffers[nextBufferId] = heap_caps_malloc(tileSize * tileSize * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+    if (!drawingBuffers[nextBufferId])
+    {
+        ESP_LOGE(TAG, "Failed to allocate memory for tile buffer");
+    }
 
-    // duk_push_int(ctx, nextBufferId);
+    duk_push_int(ctx, nextBufferId);
 
-    // nextBufferId++;
+    nextBufferId++;
 
     return 1;
 }
@@ -418,11 +438,15 @@ duk_ret_t bitsyResetTiles(duk_context *ctx)
 
 duk_ret_t bitsySetTextboxSize(duk_context *ctx)
 {
-    // textboxWidth = duk_get_int(ctx, 0);
-    // textboxHeight = duk_get_int(ctx, 1);
+    textboxWidth = duk_get_int(ctx, 0);
+    textboxHeight = duk_get_int(ctx, 1);
 
-    // drawingBuffers[1]->deleteSprite();
-    // drawingBuffers[1]->createSprite(textboxWidth, textboxHeight);
+    heap_caps_free(drawingBuffers[textboxBufferId]);
+    drawingBuffers[textboxBufferId] = heap_caps_malloc(textboxWidth * textboxHeight * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+    if (!drawingBuffers[textboxBufferId])
+    {
+        ESP_LOGE(TAG, "Failed to allocate memory for textbox buffer");
+    }
 
     return 0;
 }
@@ -449,27 +473,27 @@ duk_ret_t bitsyOnUpdate(duk_context *ctx)
     return 0;
 }
 
-void register_bitsy_api(duk_context *ctx)
+static void register_bitsy_api(duk_context *ctx)
 {
-    duk_push_c_function(ctx, bitsyLog, 2);
+    duk_push_c_function(ctx, bitsy_log, 2);
     duk_put_global_string(ctx, "bitsyLog");
 
-    duk_push_c_function(ctx, bitsyGetButton, 1);
+    duk_push_c_function(ctx, bitsy_get_button, 1);
     duk_put_global_string(ctx, "bitsyGetButton");
 
-    duk_push_c_function(ctx, bitsySetGraphicsMode, 1);
+    duk_push_c_function(ctx, bitsy_set_graphics_mode, 1);
     duk_put_global_string(ctx, "bitsySetGraphicsMode");
 
-    duk_push_c_function(ctx, bitsySetColor, 4);
+    duk_push_c_function(ctx, bitsy_set_color, 4);
     duk_put_global_string(ctx, "bitsySetColor");
 
-    duk_push_c_function(ctx, bitsyResetColors, 0);
+    duk_push_c_function(ctx, bitsy_reset_colors, 0);
     duk_put_global_string(ctx, "bitsyResetColors");
 
-    duk_push_c_function(ctx, bitsyDrawBegin, 1);
+    duk_push_c_function(ctx, bitsy_draw_begin, 1);
     duk_put_global_string(ctx, "bitsyDrawBegin");
 
-    duk_push_c_function(ctx, bitsyDrawEnd, 0);
+    duk_push_c_function(ctx, bitsy_draw_end, 0);
     duk_put_global_string(ctx, "bitsyDrawEnd");
 
     duk_push_c_function(ctx, bitsyDrawPixel, 3);
@@ -547,7 +571,7 @@ void gameLoop(duk_context *ctx)
 
         if (loopTime >= loopTimeMax && shouldContinue)
         {
-            Color bg = systemPalette[0];
+            //lv_color_t bg = systemPalette[0];
 
             // main loop
             if (duk_peval_string(ctx, "__bitsybox_on_update__();") != 0)
@@ -556,7 +580,8 @@ void gameLoop(duk_context *ctx)
             }
             duk_pop(ctx);
 
-            // Draw the screen
+            // Draw screen
+            ESP_ERROR_CHECK(vgc_lcd_draw_bitmap(0, 0, screenSize, screenSize, drawingBuffers[screenBufferId]));
 
             loopTime = 0;
         }
@@ -585,30 +610,26 @@ void gameLoop(duk_context *ctx)
 void app_duktape_bitsy()
 {
     // Initialize system palette
-    systemPalette[0] = (Color){255, 0, 0}; // Red
-    systemPalette[1] = (Color){0, 255, 0}; // Green
-    systemPalette[2] = (Color){0, 0, 255}; // Blue
+    systemPalette[0] = (31 << 11) | (0 << 5) | 0;         // Red
+    systemPalette[1] = (0 << 11) | (31 << 5) | 0;         // Green
+    systemPalette[2] = (0 << 11) | (0 << 5) | 31;         // Blue
 
-    //lv_obj_t *scr = lv_scr_act();
+    drawingBuffers[0] = heap_caps_malloc(128 * 128 * sizeof(uint16_t), MALLOC_CAP_SPIRAM);  // screen buffer
+    if (drawingBuffers[0] == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate memory for screen buffer");
+        return;
+    }
 
-    /* Task lock */
-    //lvgl_port_lock(0);
+    log_mem();
 
-    // Set up initial drawing buffers
-    // LV_DRAW_BUF_DEFINE_STATIC(draw_buf_16bpp, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, LV_COLOR_FORMAT_RGB565);
-    // LV_DRAW_BUF_INIT_STATIC(draw_buf_16bpp);
-    //drawingBuffers[0] = lv_draw_buf_create(screenSize, screenSize, LV_COLOR_FORMAT_RGB565, 0);
-    //drawingBuffers[1] = lv_draw_buf_create(textboxWidth, textboxHeight, LV_COLOR_FORMAT_RGB565, 0);
+    drawingBuffers[1] = heap_caps_malloc(textboxHeight * textboxWidth * sizeof(uint16_t), MALLOC_CAP_SPIRAM);  // textbox buffer
+    if (drawingBuffers[1] == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate memory for textbox buffer");
+        heap_caps_free(drawingBuffers[0]);
+        return;
+    }
 
-
-    // Create canvas
-    // canvas = lv_canvas_create(scr);
-    // lv_canvas_set_draw_buf(canvas, &drawingBuffers[0]);
-    // lv_obj_center(canvas);
-    // lv_canvas_fill_bg(canvas, lv_color_black(), LV_OPA_COVER);
-
-    /* Task unlock */
-    //lvgl_port_unlock();
+    log_mem();
 
     duk_context *ctx = NULL;
     ctx = duk_create_heap(duk_psram_alloc, duk_psram_realloc, duk_psram_free, NULL, duk_fatal_error);
@@ -640,7 +661,7 @@ void app_duktape_bitsy()
     ESP_LOGI(TAG, "Bitsy engine loaded");
     // Load game data
     const char *gameFilePath = "/spiflash/bitsy/games/mossland.bitsy";
-    if (!load(ctx, gameFilePath, FILETYPE_FILE, "__bitsybox_game_data__"))
+    if (!duk_load(ctx, gameFilePath, FILETYPE_FILE, "__bitsybox_game_data__"))
     {
         ESP_LOGE(TAG, "Failed to load game data: %s", gameFilePath);
         return;
@@ -653,8 +674,14 @@ void app_duktape_bitsy()
 
     log_mem();
 
-    // sleep for a while
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
+    // Free buffers
+    for (int i = 0; i < SYSTEM_DRAWING_BUFFER_MAX; i++)
+    {
+        if (drawingBuffers[i])
+        {
+            heap_caps_free(drawingBuffers[i]);
+        }
+    }
 
     // Clean up and destroy the Duktape heap
     duk_destroy_heap(ctx);

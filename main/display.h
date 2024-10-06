@@ -28,17 +28,15 @@
 #define EXAMPLE_LCD_GPIO_CS (GPIO_NUM_5)
 #define EXAMPLE_LCD_GPIO_BL (GPIO_NUM_25)
 
-/* LCD IO and panel */
-static esp_lcd_panel_io_handle_t vgc_lcd_io_handle = NULL;
-static esp_lcd_panel_handle_t vgc_lcd_panel_handle = NULL;
-
-/* LVGL display and touch */
-static lv_display_t *vgc_display = NULL;
-
 esp_err_t vgc_lcd_init();
+esp_err_t vgc_lcd_deinit();
+esp_err_t vgc_lcd_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap);
+
 esp_err_t vgc_lvgl_init();
 esp_err_t vgc_lvgl_deinit();
 
-void vgc_display_test();
+void vgc_esp_lcd_test();
+void vgc_lvgl_hello_world();
+void vgc_lvgl_color_test();
 
 #endif // DISPLAY_H

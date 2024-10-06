@@ -15,17 +15,16 @@ void app_main(void)
     ESP_ERROR_CHECK(vgc_lcd_init());
 
     /* LVGL initialization */
-    ESP_ERROR_CHECK(vgc_lvgl_init());
+    //ESP_ERROR_CHECK(vgc_lvgl_init());
 
-    // Run bitsy engine
-    //app_duktape_bitsy();
-    vgc_display_test();
+    //vgc_esp_lcd_test();
+    app_duktape_bitsy();
 
-    // Wait
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
+    // Deinit LCD
+    ESP_ERROR_CHECK(vgc_lcd_deinit());
 
     // Deinit LVGL
-    ESP_ERROR_CHECK(vgc_lvgl_deinit());
+    //ESP_ERROR_CHECK(vgc_lvgl_deinit());
 
     // Deinit FS
     ESP_ERROR_CHECK(vgc_fs_deinit());
