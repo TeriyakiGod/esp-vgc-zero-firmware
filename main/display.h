@@ -28,6 +28,8 @@
 #define EXAMPLE_LCD_GPIO_CS (GPIO_NUM_5)
 #define EXAMPLE_LCD_GPIO_BL (GPIO_NUM_25)
 
+esp_err_t vgc_lcd_clear();
+
 esp_err_t vgc_lcd_init();
 esp_err_t vgc_lcd_deinit();
 esp_err_t vgc_lcd_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap);

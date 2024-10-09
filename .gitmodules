@@ -1,3 +1,0 @@
-[submodule "components/esp_lcd_st7735"]
-	path = components/esp_lcd_st7735
-	url = git@github.com:appsou/esp_lcd_st7735.git

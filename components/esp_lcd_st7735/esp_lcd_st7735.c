@@ -170,26 +170,29 @@ typedef struct
 
 const uint8_t TFT_INIT_DELAY = 0;
 
-static const st7735_lcd_init_cmd_t vendor_specific_init_default[] = {
-    {ST7735_SWRESET, (uint8_t[]){0x00}, 1, 0},                                                                                            // Software reset, 0 args, w/delay 150
-    {ST7735_SLPOUT, (uint8_t[]){0x00}, 1, 0},                                                                                             // Out of sleep mode, 0 args, w/delay 500
-    {ST7735_FRMCTR1, (uint8_t[]){0x05, 0x3A, 0x3A}, 3, 0},                                                                                // Frame rate ctrl - normal mode, 3 args: Rate = fosc/(1x2+40) * (LINE+2C+2D)
-    {ST7735_FRMCTR2, (uint8_t[]){0x05, 0x3A, 0x3A}, 3, 0},                                                                                // Frame rate control - idle mode, 3 args:Rate = fosc/(1x2+40) * (LINE+2C+2D)
-    {ST7735_FRMCTR3, (uint8_t[]){0x05, 0x3A, 0x3A, 0x05, 0x3A, 0x3A}, 6, 0},                                                              // Frame rate ctrl - partial mode, 6 args:Dot inversion mode. Line inversion mode
-    {ST7735_INVCTR, (uint8_t[]){0x03}, 1, 0},                                                                                             // Display inversion ctrl, 1 arg, no delay:No inversion
-    {ST7735_PWCTR1, (uint8_t[]){0x62, 0x02, 0x04}, 3, 0},                                                                                 // Power control, 3 args, no delay:-4.6V AUTO mode
-    {ST7735_PWCTR2, (uint8_t[]){0xC0}, 1, 0},                                                                                             // Power control, 1 arg, no delay:VGH25 = 2.4C VGSEL = -10 VGH = 3 * AVDD
-    {ST7735_PWCTR3, (uint8_t[]){0x0D, 0x00}, 2, 0},                                                                                       // Power control, 2 args, no delay: Opamp current small, Boost frequency
-    {ST7735_PWCTR4, (uint8_t[]){0x8D, 0x6A}, 2, 0},                                                                                       // Power control, 2 args, no delay: BCLK/2, Opamp current small & Medium low
-    {ST7735_PWCTR5, (uint8_t[]){0x8D, 0xEE}, 2, 0},                                                                                       // Power control, 2 args, no delay:
-    {ST7735_VMCTR1, (uint8_t[]){0x0E}, 1, 0},                                                                                             // Power control, 1 arg, no delay:
-    {ST7735_INVON, (uint8_t[]){0x00}, 1, 0},                                                                                              // set inverted mode
-                                                                                                                                          //{ST7735_INVOFF, {0}, 0},                    // set non-inverted mode
-    {ST7735_COLMOD, (uint8_t[]){0x05}, 1, 0},                                                                                             // set color mode, 1 arg, no delay: 16-bit color
-    {ST7735_GMCTRP1, (uint8_t[]){0x10, 0x0E, 0x02, 0x03, 0x0E, 0x07, 0x02, 0x07, 0x0A, 0x12, 0x27, 0x37, 0x00, 0x0D, 0x0E, 0x10}, 16, 0}, // 16 args, no delay:
-    {ST7735_GMCTRN1, (uint8_t[]){0x10, 0x0E, 0x03, 0x03, 0x0F, 0x06, 0x02, 0x08, 0x0A, 0x13, 0x26, 0x36, 0x00, 0x0D, 0x0E, 0x10}, 16, 0}, // 16 args, no delay:
+st7735_lcd_init_cmd_t st7735_init_cmds[] = {
+    // Rcmd1
+    {ST7735_SWRESET, (uint8_t[]){0x00}, 1, 150},                                                                                          // Software reset, 150 ms delay
+    {ST7735_SLPOUT, (uint8_t[]){0x00}, 1, 255},                                                                                           // Out of sleep mode, 255 ms delay
+    {ST7735_FRMCTR1, (uint8_t[]){0x01, 0x2C, 0x2D}, 3, 0},                                                                                // Frame rate ctrl - normal mode
+    {ST7735_FRMCTR2, (uint8_t[]){0x01, 0x2C, 0x2D}, 3, 0},                                                                                // Frame rate control - idle mode
+    {ST7735_FRMCTR3, (uint8_t[]){0x01, 0x2C, 0x2D, 0x01, 0x2C, 0x2D}, 6, 0},                                                              // Frame rate ctrl - partial mode
+    {ST7735_INVCTR, (uint8_t[]){0x07}, 1, 0},                                                                                             // Display inversion ctrl
+    {ST7735_PWCTR1, (uint8_t[]){0xA2, 0x02, 0x84}, 3, 0},                                                                                 // Power control
+    {ST7735_PWCTR2, (uint8_t[]){0xC5}, 1, 0},                                                                                             // Power control
+    {ST7735_PWCTR3, (uint8_t[]){0x0A, 0x00}, 2, 0},                                                                                       // Power control
+    {ST7735_PWCTR4, (uint8_t[]){0x8A, 0x2A}, 2, 0},                                                                                       // Power control
+    {ST7735_PWCTR5, (uint8_t[]){0x8A, 0xEE}, 2, 0},                                                                                       // Power control
+    {ST7735_VMCTR1, (uint8_t[]){0x0E}, 1, 0},                                                                                             // Power control
+    {ST7735_INVOFF, (uint8_t[]){0x00}, 1, 0},                                                                                             // Don't invert display
+    {ST7735_MADCTL, (uint8_t[]){0x00}, 1, 0},                                                                       // Memory access control
+    {ST7735_COLMOD, (uint8_t[]){0x05}, 1, 0},                                                                                             // Set color mode (16-bit)
+    {ST7735_CASET, (uint8_t[]){0x00, 0x02, 0x00, 0x7F + 0x02}, 4, 0},                                                                     // Column addr set
+    {ST7735_RASET, (uint8_t[]){0x00, 0x01, 0x00, 0x9F + 0x01}, 4, 0},                                                                     // Row addr set
+    {ST7735_GMCTRP1, (uint8_t[]){0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2B, 0x39, 0x00, 0x01, 0x03, 0x10}, 16, 0}, // Positive Gamma
+    {ST7735_GMCTRN1, (uint8_t[]){0x03, 0x1d, 0x07, 0x06, 0x2E, 0x2C, 0x29, 0x2D, 0x2E, 0x2E, 0x37, 0x3F, 0x00, 0x00, 0x02, 0x10}, 16, 0}, // Negative Gamma
     {ST7735_NORON, (uint8_t[]){0x00}, 1, TFT_INIT_DELAY},                                                                                 // Normal display on, no args, w/delay 10 ms delay
-    {ST7735_DISPON, (uint8_t[]){0x00}, 1, TFT_INIT_DELAY},                                                                                // Main screen turn on, no args w/delay 100 ms delay
+    {ST7735_DISPON, (uint8_t[]){0x00}, 1, TFT_INIT_DELAY},
 };
 
 static esp_err_t panel_st7735_init(esp_lcd_panel_t *panel)
@@ -220,8 +223,8 @@ static esp_err_t panel_st7735_init(esp_lcd_panel_t *panel)
     }
     else
     {
-        init_cmds = vendor_specific_init_default;
-        init_cmds_size = sizeof(vendor_specific_init_default) / sizeof(st7735_lcd_init_cmd_t);
+        init_cmds = st7735_init_cmds;
+        init_cmds_size = sizeof(st7735_init_cmds) / sizeof(st7735_lcd_init_cmd_t);
     }
 
     bool is_cmd_overwritten = false;

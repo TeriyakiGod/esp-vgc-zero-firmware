@@ -21,6 +21,18 @@ static esp_lcd_panel_handle_t vgc_lcd_panel_handle = NULL;
 /* LVGL display and touch */
 static lv_display_t *vgc_display = NULL;
 
+esp_err_t vgc_lcd_clear(){
+    // fill screen with black
+    uint16_t *black_bitmap = heap_caps_malloc(EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+    for (int i = 0; i < EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES; i++)
+    {
+        black_bitmap[i] = 0x0000;
+    }
+    esp_err_t result = esp_lcd_panel_draw_bitmap(vgc_lcd_panel_handle, 0, 0, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, black_bitmap);
+    heap_caps_free(black_bitmap);
+    return result;
+}
+
 esp_err_t vgc_lcd_init()
 {
     esp_err_t ret = ESP_OK;
@@ -67,6 +79,8 @@ esp_err_t vgc_lcd_init()
     esp_lcd_panel_init(vgc_lcd_panel_handle);
     esp_lcd_panel_mirror(vgc_lcd_panel_handle, true, true);
     esp_lcd_panel_disp_on_off(vgc_lcd_panel_handle, true);
+    esp_lcd_panel_set_gap(vgc_lcd_panel_handle, 2, 3);
+    vgc_lcd_clear();
 
     /* LCD backlight on */
     ESP_ERROR_CHECK(gpio_set_level(EXAMPLE_LCD_GPIO_BL, EXAMPLE_LCD_BL_ON_LEVEL));
