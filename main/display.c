@@ -23,12 +23,12 @@ static lv_display_t *vgc_display = NULL;
 
 esp_err_t vgc_lcd_clear(){
     // fill screen with black
-    uint16_t *black_bitmap = heap_caps_malloc(EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
-    for (int i = 0; i < EXAMPLE_LCD_H_RES * EXAMPLE_LCD_V_RES; i++)
+    uint16_t *black_bitmap = heap_caps_malloc(VGC_LCD_H_RES * VGC_LCD_V_RES * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+    for (int i = 0; i < VGC_LCD_H_RES * VGC_LCD_V_RES; i++)
     {
         black_bitmap[i] = 0x0000;
     }
-    esp_err_t result = esp_lcd_panel_draw_bitmap(vgc_lcd_panel_handle, 0, 0, EXAMPLE_LCD_H_RES, EXAMPLE_LCD_V_RES, black_bitmap);
+    esp_err_t result = esp_lcd_panel_draw_bitmap(vgc_lcd_panel_handle, 0, 0, VGC_LCD_H_RES, VGC_LCD_V_RES, black_bitmap);
     heap_caps_free(black_bitmap);
     return result;
 }
@@ -40,50 +40,51 @@ esp_err_t vgc_lcd_init()
     /* LCD backlight */
     gpio_config_t bk_gpio_config = {
         .mode = GPIO_MODE_OUTPUT,
-        .pin_bit_mask = 1ULL << EXAMPLE_LCD_GPIO_BL};
+        .pin_bit_mask = 1ULL << VGC_LCD_GPIO_BL};
     ESP_ERROR_CHECK(gpio_config(&bk_gpio_config));
 
     /* LCD initialization */
     ESP_LOGD(TAG, "Initialize SPI bus");
     const spi_bus_config_t buscfg = {
-        .sclk_io_num = EXAMPLE_LCD_GPIO_SCLK,
-        .mosi_io_num = EXAMPLE_LCD_GPIO_MOSI,
+        .sclk_io_num = VGC_LCD_GPIO_SCLK,
+        .mosi_io_num = VGC_LCD_GPIO_MOSI,
         .miso_io_num = GPIO_NUM_NC,
         .quadwp_io_num = GPIO_NUM_NC,
         .quadhd_io_num = GPIO_NUM_NC,
-        .max_transfer_sz = EXAMPLE_LCD_H_RES * EXAMPLE_LCD_DRAW_BUFF_HEIGHT * sizeof(uint16_t),
+        .max_transfer_sz = VGC_LCD_H_RES * VGC_LCD_DRAW_BUFF_HEIGHT * sizeof(uint16_t),
     };
-    ESP_RETURN_ON_ERROR(spi_bus_initialize(EXAMPLE_LCD_SPI_NUM, &buscfg, SPI_DMA_CH_AUTO), TAG, "SPI init failed");
+    ESP_RETURN_ON_ERROR(spi_bus_initialize(VGC_LCD_SPI_NUM, &buscfg, SPI_DMA_CH_AUTO), TAG, "SPI init failed");
 
     ESP_LOGD(TAG, "Install panel IO");
     const esp_lcd_panel_io_spi_config_t io_config = {
-        .dc_gpio_num = EXAMPLE_LCD_GPIO_DC,
-        .cs_gpio_num = EXAMPLE_LCD_GPIO_CS,
-        .pclk_hz = EXAMPLE_LCD_PIXEL_CLK_HZ,
-        .lcd_cmd_bits = EXAMPLE_LCD_CMD_BITS,
-        .lcd_param_bits = EXAMPLE_LCD_PARAM_BITS,
+        .dc_gpio_num = VGC_LCD_GPIO_DC,
+        .cs_gpio_num = VGC_LCD_GPIO_CS,
+        .pclk_hz = VGC_LCD_PIXEL_CLK_HZ,
+        .lcd_cmd_bits = VGC_LCD_CMD_BITS,
+        .lcd_param_bits = VGC_LCD_PARAM_BITS,
         .spi_mode = 0,
         .trans_queue_depth = 10,
     };
-    ESP_GOTO_ON_ERROR(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)EXAMPLE_LCD_SPI_NUM, &io_config, &vgc_lcd_io_handle), err, TAG, "New panel IO failed");
+    ESP_GOTO_ON_ERROR(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)VGC_LCD_SPI_NUM, &io_config, &vgc_lcd_io_handle), err, TAG, "New panel IO failed");
 
     ESP_LOGD(TAG, "Install LCD driver");
     const esp_lcd_panel_dev_config_t panel_config = {
-        .reset_gpio_num = EXAMPLE_LCD_GPIO_RST,
-        .rgb_ele_order = EXAMPLE_LCD_ELEMENT_ORDER,
-        .bits_per_pixel = EXAMPLE_LCD_BITS_PER_PIXEL,
+        .reset_gpio_num = VGC_LCD_GPIO_RST,
+        .rgb_ele_order = VGC_LCD_ELEMENT_ORDER,
+        .bits_per_pixel = VGC_LCD_BITS_PER_PIXEL,
     };
     ESP_GOTO_ON_ERROR(esp_lcd_new_panel_st7735(vgc_lcd_io_handle, &panel_config, &vgc_lcd_panel_handle), err, TAG, "New panel failed");
 
     esp_lcd_panel_reset(vgc_lcd_panel_handle);
     esp_lcd_panel_init(vgc_lcd_panel_handle);
     esp_lcd_panel_mirror(vgc_lcd_panel_handle, true, true);
-    esp_lcd_panel_disp_on_off(vgc_lcd_panel_handle, true);
     esp_lcd_panel_set_gap(vgc_lcd_panel_handle, 2, 3);
+    esp_lcd_panel_invert_color(vgc_lcd_panel_handle, false);
+    esp_lcd_panel_disp_on_off(vgc_lcd_panel_handle, true);
     vgc_lcd_clear();
 
     /* LCD backlight on */
-    ESP_ERROR_CHECK(gpio_set_level(EXAMPLE_LCD_GPIO_BL, EXAMPLE_LCD_BL_ON_LEVEL));
+    ESP_ERROR_CHECK(gpio_set_level(VGC_LCD_GPIO_BL, VGC_LCD_BL_ON_LEVEL));
 
     return ret;
 
@@ -96,7 +97,7 @@ err:
     {
         esp_lcd_panel_io_del(vgc_lcd_io_handle);
     }
-    spi_bus_free(EXAMPLE_LCD_SPI_NUM);
+    spi_bus_free(VGC_LCD_SPI_NUM);
     return ret;
 }
 
@@ -117,10 +118,10 @@ esp_err_t vgc_lvgl_init()
     const lvgl_port_display_cfg_t disp_cfg = {
         .io_handle = vgc_lcd_io_handle,
         .panel_handle = vgc_lcd_panel_handle,
-        .buffer_size = EXAMPLE_LCD_H_RES * EXAMPLE_LCD_DRAW_BUFF_HEIGHT,
-        .double_buffer = EXAMPLE_LCD_DRAW_BUFF_DOUBLE,
-        .hres = EXAMPLE_LCD_H_RES,
-        .vres = EXAMPLE_LCD_V_RES,
+        .buffer_size = VGC_LCD_H_RES * VGC_LCD_DRAW_BUFF_HEIGHT,
+        .double_buffer = VGC_LCD_DRAW_BUFF_DOUBLE,
+        .hres = VGC_LCD_H_RES,
+        .vres = VGC_LCD_V_RES,
         .monochrome = false,
         .color_format = LV_COLOR_FORMAT_RGB565,
         .rotation = {
@@ -142,13 +143,13 @@ esp_err_t vgc_lcd_deinit()
     esp_err_t ret = ESP_OK;
 
     /* LCD backlight off */
-    ESP_ERROR_CHECK(gpio_set_level(EXAMPLE_LCD_GPIO_BL, !EXAMPLE_LCD_BL_ON_LEVEL));
+    ESP_ERROR_CHECK(gpio_set_level(VGC_LCD_GPIO_BL, !VGC_LCD_BL_ON_LEVEL));
 
     /* Deinitialize LCD */
     ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(vgc_lcd_panel_handle, false));
     ESP_ERROR_CHECK(esp_lcd_panel_del(vgc_lcd_panel_handle));
     ESP_ERROR_CHECK(esp_lcd_panel_io_del(vgc_lcd_io_handle));
-    ESP_ERROR_CHECK(spi_bus_free(EXAMPLE_LCD_SPI_NUM));
+    ESP_ERROR_CHECK(spi_bus_free(VGC_LCD_SPI_NUM));
 
     return ret;
 }

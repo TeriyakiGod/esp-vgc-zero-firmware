@@ -166,16 +166,14 @@ void duk_run_bitsy_game_loop(duk_context *ctx)
     // Main game loop
     while (!isGameOver)
     {
-        // Get INPUT (you can add your input handling logic here)
-
-        // Update game state and draw screen continuously
+        // Update game state
         if (duk_peval_string(ctx, "__bitsybox_on_update__();") != 0)
         {
             printf("Update Bitsy Error: %s\n", duk_safe_to_string(ctx, -1));
         }
         duk_pop(ctx);
 
-        // Draw screen buffer to LCD without any delay
+        // Draw screen buffer to LCD
         ESP_ERROR_CHECK(vgc_lcd_draw_bitmap(0, 0, SCREEN_SIZE, SCREEN_SIZE, drawingBuffers[SCREEN_BUFFER_ID]));
 
         // Check if game over
@@ -203,7 +201,7 @@ void app_duktape_bitsy()
     systemPalette[2] = (0 << 11) | (0 << 5) | 31;         // Blue
 
     // Initialize drawing buffers
-    drawingBuffers[0] = heap_caps_malloc(SCREEN_SIZE * SCREEN_SIZE * sizeof(uint16_t), MALLOC_CAP_SPIRAM);  // screen buffer
+    drawingBuffers[0] = heap_caps_malloc(SCREEN_SIZE * SCREEN_SIZE * sizeof(uint16_t), MALLOC_CAP_DMA);  // screen buffer
     if (drawingBuffers[0] == NULL) {
         ESP_LOGE(TAG, "Failed to allocate memory for screen buffer");
         return;
@@ -211,7 +209,7 @@ void app_duktape_bitsy()
 
     log_mem();
 
-    drawingBuffers[1] = heap_caps_malloc(SCREEN_SIZE * SCREEN_SIZE * sizeof(uint16_t), MALLOC_CAP_SPIRAM);  // textbox buffer
+    drawingBuffers[1] = heap_caps_malloc(10 * 10 * sizeof(uint16_t), MALLOC_CAP_SPIRAM);  // textbox buffer
     if (drawingBuffers[1] == NULL) {
         ESP_LOGE(TAG, "Failed to allocate memory for textbox buffer");
         heap_caps_free(drawingBuffers[0]);
@@ -256,6 +254,9 @@ void app_duktape_bitsy()
     }
 
     log_mem();
+
+    // initialize input
+    init_input();
 
     // Run the game loop
     duk_run_bitsy_game_loop(ctx);

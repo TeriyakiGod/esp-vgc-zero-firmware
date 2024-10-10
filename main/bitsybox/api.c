@@ -12,35 +12,8 @@ int curBufferId = -1;
 int tileStartBufferId = 2;
 int nextBufferId = 2;
 
-int textboxWidth = 100;
-int textboxHeight = 64;
-
-/* INPUT */
-int isButtonUp = 0;
-int isButtonDown = 0;
-int isButtonLeft = 0;
-int isButtonRight = 0;
-int isButtonW = 0;
-int isButtonA = 0;
-int isButtonS = 0;
-int isButtonD = 0;
-int isButtonR = 0;
-int isButtonSpace = 0;
-int isButtonReturn = 0;
-int isButtonEscape = 0;
-int isButtonLCtrl = 0;
-int isButtonRCtrl = 0;
-int isButtonLAlt = 0;
-int isButtonRAlt = 0;
-int isButtonPadUp = 0;
-int isButtonPadDown = 0;
-int isButtonPadLeft = 0;
-int isButtonPadRight = 0;
-int isButtonPadA = 0;
-int isButtonPadB = 0;
-int isButtonPadX = 0;
-int isButtonPadY = 0;
-int isButtonPadStart = 0;
+int textboxWidth = 0;
+int textboxHeight = 0;
 
 duk_ret_t bitsy_log(duk_context *ctx)
 {
@@ -55,10 +28,10 @@ duk_ret_t bitsy_get_button(duk_context *ctx)
 {
     int buttonCode = duk_get_int(ctx, 0);
 
-    int isAnyAlt = (isButtonLAlt || isButtonRAlt);
-    int isAnyCtrl = (isButtonLCtrl || isButtonRCtrl);
-    int isCtrlPlusR = isAnyCtrl && isButtonR;
-    int isPadFaceButton = isButtonPadA || isButtonPadB || isButtonPadX || isButtonPadY;
+    bool isAnyAlt = (isButtonLAlt || isButtonRAlt);
+    bool isAnyCtrl = (isButtonLCtrl || isButtonRCtrl);
+    bool isCtrlPlusR = isAnyCtrl && isButtonR;
+    bool isPadFaceButton = isButtonPadA || isButtonPadB || isButtonPadX || isButtonPadY;
 
     if (buttonCode == 0)
     {
@@ -141,15 +114,36 @@ duk_ret_t bitsy_draw_pixel(duk_context *ctx)
 
     uint16_t color = systemPalette[paletteIndex];
 
+    // Apply render scale
+    int scaledX = x * RENDER_SCALE;
+    int scaledY = y * RENDER_SCALE;
+
     if (curBufferId == 0 && curGraphicsMode == 0) {
-		drawingBuffers[SCREEN_BUFFER_ID][y * SCREEN_SIZE + x] = color;
-	}
-	else if (curBufferId == 1 && curGraphicsMode == 1) {
-		drawingBuffers[TEXTBOX_BUFFER_ID][y * textboxWidth + x] = color;
-	}
-	else if (curBufferId >= tileStartBufferId && curBufferId < nextBufferId && curGraphicsMode == 1) {
-		drawingBuffers[curBufferId][y * TILE_SIZE + x] = color;
-	}
+        // Use scaled coordinates
+        for (int i = 0; i < RENDER_SCALE; i++) {
+            for (int j = 0; j < RENDER_SCALE; j++) {
+                drawingBuffers[SCREEN_BUFFER_ID][(scaledY + j) * SCREEN_SIZE + (scaledX + i)] = color;
+            }
+        }
+    }
+    else if (curBufferId == 1 && curGraphicsMode == 1) {
+        // Use textboxRenderScale for this buffer
+        int scaledTextboxX = x * TEXTBOX_RENDER_SCALE;
+        int scaledTextboxY = y * TEXTBOX_RENDER_SCALE;
+        for (int i = 0; i < TEXTBOX_RENDER_SCALE; i++) {
+            for (int j = 0; j < TEXTBOX_RENDER_SCALE; j++) {
+                drawingBuffers[TEXTBOX_BUFFER_ID][(scaledTextboxY + j) * textboxWidth + (scaledTextboxX + i)] = color;
+            }
+        }
+    }
+    else if (curBufferId >= tileStartBufferId && curBufferId < nextBufferId && curGraphicsMode == 1) {
+        // Use scaled coordinates for tile buffer
+        for (int i = 0; i < RENDER_SCALE; i++) {
+            for (int j = 0; j < RENDER_SCALE; j++) {
+                drawingBuffers[curBufferId][(scaledY + j) * TILE_SIZE + (scaledX + i)] = color;
+            }
+        }
+    }
 
     return 0;
 }
@@ -157,8 +151,7 @@ duk_ret_t bitsy_draw_pixel(duk_context *ctx)
 duk_ret_t bitsy_draw_tile(duk_context *ctx)
 {
     // Can only draw tiles on the screen buffer in tile mode
-    if (curBufferId != 0 || curGraphicsMode != 1)
-    {
+    if (curBufferId != 0 || curGraphicsMode != 1) {
         return 0;
     }
 
@@ -166,86 +159,100 @@ duk_ret_t bitsy_draw_tile(duk_context *ctx)
     int x = duk_get_int(ctx, 1);
     int y = duk_get_int(ctx, 2);
 
-    // Validate that tileId is within the allowed range
-    if (tileId < tileStartBufferId || tileId >= nextBufferId)
-    {
+    // Ensure the tileId is valid
+    if (tileId < tileStartBufferId || tileId >= nextBufferId) {
         return 0;
     }
 
-    // Calculate base offsets for both buffers
-    uint16_t *tileBuffer = drawingBuffers[tileId];
-    uint16_t *screenBuffer = drawingBuffers[SCREEN_BUFFER_ID];
+    // Calculate the tile position and size with render scale
+    int scaledX = x * TILE_SIZE * RENDER_SCALE;
+    int scaledY = y * TILE_SIZE * RENDER_SCALE;
+    //int scaledTileSize = TILE_SIZE * RENDER_SCALE;
 
-    // Copy tile to screen buffer row by row
-    for (int ty = 0; ty < TILE_SIZE; ty++)
-    {
-        // Precompute offsets for the current row in both buffers
-        int screenRowOffset = (y + ty) * SCREEN_SIZE + x;
-        int tileRowOffset = ty * TILE_SIZE;
+    // Iterate over each pixel of the tile and draw it to the screen buffer
+    for (int ty = 0; ty < TILE_SIZE; ty++) {
+        for (int tx = 0; tx < TILE_SIZE; tx++) {
+            uint16_t color = drawingBuffers[tileId][ty * TILE_SIZE + tx]; // Get the pixel color from the tile buffer
 
-        // Use memcpy to copy the entire row from the tile buffer to the screen buffer
-        memcpy(&screenBuffer[screenRowOffset], &tileBuffer[tileRowOffset], TILE_SIZE * sizeof(uint16_t));
+            // Scale the pixel drawing using RENDER_SCALE
+            for (int i = 0; i < RENDER_SCALE; i++) {
+                for (int j = 0; j < RENDER_SCALE; j++) {
+                    int bufferX = scaledX + (tx * RENDER_SCALE) + i;
+                    int bufferY = scaledY + (ty * RENDER_SCALE) + j;
+
+                    // Draw the scaled pixel on the screen buffer
+                    drawingBuffers[SCREEN_BUFFER_ID][bufferY * SCREEN_SIZE + bufferX] = color;
+                }
+            }
+        }
     }
 
     return 0;
 }
 
-duk_ret_t bitsy_draw_textbox(duk_context *ctx)
+duk_ret_t bitsy_draw_textbox(duk_context* ctx)
 {
-    if (curBufferId != 0 || curGraphicsMode != 1)
-    {
+    // Can only draw the textbox on the screen buffer in tile mode
+    if (curBufferId != 0 || curGraphicsMode != 1) {
         return 0;
     }
 
     int x = duk_get_int(ctx, 0);
     int y = duk_get_int(ctx, 1);
 
-    // Calculate base offsets for both buffers
-    uint16_t *textboxBuffer = drawingBuffers[TEXTBOX_BUFFER_ID];
-    uint16_t *screenBuffer = drawingBuffers[SCREEN_BUFFER_ID];
+    // Calculate the scaled position of the textbox
+    int scaledX = x * TEXTBOX_RENDER_SCALE;
+    int scaledY = y * TEXTBOX_RENDER_SCALE;
 
-    // Precompute the start row in the screen buffer
-    for (int ty = 0; ty < textboxHeight; ty++)
-    {
-        // Precompute offsets for the current row in both buffers
-        int screenRowOffset = (y + ty) * SCREEN_SIZE + x;
-        int textboxRowOffset = ty * textboxWidth;
+    // Iterate over each pixel of the textbox buffer and scale it
+    for (int ty = 0; ty < textboxHeight; ty++) {
+        for (int tx = 0; tx < textboxWidth; tx++) {
+            uint16_t color = drawingBuffers[TEXTBOX_BUFFER_ID][ty * textboxWidth + tx]; // Get the pixel color from the textbox buffer
 
-        // Use memcpy to copy an entire row at once
-        memcpy(&screenBuffer[screenRowOffset], &textboxBuffer[textboxRowOffset], textboxWidth * sizeof(uint16_t));
+            // Scale the pixel drawing using TEXTBOX_RENDER_SCALE
+            for (int i = 0; i < TEXTBOX_RENDER_SCALE; i++) {
+                for (int j = 0; j < TEXTBOX_RENDER_SCALE; j++) {
+                    int bufferX = scaledX + (tx * TEXTBOX_RENDER_SCALE) + i;
+                    int bufferY = scaledY + (ty * TEXTBOX_RENDER_SCALE) + j;
+
+                    // Draw the scaled pixel on the screen buffer
+                    drawingBuffers[SCREEN_BUFFER_ID][bufferY * SCREEN_SIZE + bufferX] = color;
+                }
+            }
+        }
     }
 
     return 0;
 }
 
-duk_ret_t bitsy_clear(duk_context *ctx)
+duk_ret_t bitsy_clear(duk_context* ctx)
 {
     int paletteIndex = duk_get_int(ctx, 0);
 
     uint16_t color = systemPalette[paletteIndex];
 
-    if (curBufferId == 0)
-    {
-        // Clear the screen buffer
-        for (int i = 0; i < SCREEN_SIZE * SCREEN_SIZE; i++)
-        {
-            drawingBuffers[SCREEN_BUFFER_ID][i] = color;
+    // Clear the screen buffer
+    if (curBufferId == 0) {
+        for (int y = 0; y < SCREEN_SIZE * RENDER_SCALE; y++) {
+            for (int x = 0; x < SCREEN_SIZE * RENDER_SCALE; x++) {
+                drawingBuffers[SCREEN_BUFFER_ID][y * SCREEN_SIZE + x] = color;
+            }
         }
     }
-    else if (curBufferId == 1)
-    {
-        // Clear the textbox buffer
-        for (int i = 0; i < textboxWidth * textboxHeight; i++)
-        {
-            drawingBuffers[TEXTBOX_BUFFER_ID][i] = color;
+    // Clear the textbox buffer
+    else if (curBufferId == 1) {
+        for (int y = 0; y < textboxHeight * TEXTBOX_RENDER_SCALE; y++) {
+            for (int x = 0; x < textboxWidth * TEXTBOX_RENDER_SCALE; x++) {
+                drawingBuffers[TEXTBOX_BUFFER_ID][y * textboxWidth + x] = color;
+            }
         }
     }
-    else if (curBufferId >= tileStartBufferId && curBufferId < nextBufferId)
-    {
-        // Clear the tile buffer
-        for (int i = 0; i < TILE_SIZE * TILE_SIZE; i++)
-        {
-            drawingBuffers[curBufferId][i] = color;
+    // Clear the tile buffer
+    else if (curBufferId >= tileStartBufferId && curBufferId < nextBufferId) {
+        for (int y = 0; y < TILE_SIZE * RENDER_SCALE; y++) {
+            for (int x = 0; x < TILE_SIZE * RENDER_SCALE; x++) {
+                drawingBuffers[curBufferId][y * TILE_SIZE + x] = color;
+            }
         }
     }
 

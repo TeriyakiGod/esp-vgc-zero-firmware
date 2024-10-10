@@ -1,1 +1,2 @@
-idf_component_register(SRCS "fs.c" "display.c" "bitsybox/bitsybox.c" "bitsybox/api.c" "main.c" INCLUDE_DIRS ".")
+file(GLOB_RECURSE SRC_FILES "./*.c")
+idf_component_register(SRCS ${SRC_FILES} INCLUDE_DIRS ".")
