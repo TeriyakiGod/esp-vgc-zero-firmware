@@ -24,10 +24,7 @@ static lv_display_t *vgc_display = NULL;
 esp_err_t vgc_lcd_clear(){
     // fill screen with black
     uint16_t *black_bitmap = heap_caps_malloc(VGC_LCD_H_RES * VGC_LCD_V_RES * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
-    for (int i = 0; i < VGC_LCD_H_RES * VGC_LCD_V_RES; i++)
-    {
-        black_bitmap[i] = 0x0000;
-    }
+    memset(black_bitmap, 0, VGC_LCD_H_RES * VGC_LCD_V_RES * sizeof(uint16_t));
     esp_err_t result = esp_lcd_panel_draw_bitmap(vgc_lcd_panel_handle, 0, 0, VGC_LCD_H_RES, VGC_LCD_V_RES, black_bitmap);
     heap_caps_free(black_bitmap);
     return result;

@@ -166,6 +166,9 @@ void duk_run_bitsy_game_loop(duk_context *ctx)
     // Main game loop
     while (!isGameOver)
     {
+        // Get input
+        get_input();
+
         // Update game state
         if (duk_peval_string(ctx, "__bitsybox_on_update__();") != 0)
         {
@@ -209,7 +212,7 @@ void app_duktape_bitsy()
 
     log_mem();
 
-    drawingBuffers[1] = heap_caps_malloc(10 * 10 * sizeof(uint16_t), MALLOC_CAP_SPIRAM);  // textbox buffer
+    drawingBuffers[1] = heap_caps_malloc(104 * 38 * sizeof(uint16_t), MALLOC_CAP_DMA);  // textbox buffer
     if (drawingBuffers[1] == NULL) {
         ESP_LOGE(TAG, "Failed to allocate memory for textbox buffer");
         heap_caps_free(drawingBuffers[0]);

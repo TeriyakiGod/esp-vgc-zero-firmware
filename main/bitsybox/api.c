@@ -12,8 +12,8 @@ int curBufferId = -1;
 int tileStartBufferId = 2;
 int nextBufferId = 2;
 
-int textboxWidth = 0;
-int textboxHeight = 0;
+int textboxWidth = 104;
+int textboxHeight = 38;
 
 duk_ret_t bitsy_log(duk_context *ctx)
 {
@@ -68,7 +68,6 @@ duk_ret_t bitsy_get_button(duk_context *ctx)
 duk_ret_t bitsy_set_graphics_mode(duk_context *ctx)
 {
     curGraphicsMode = duk_get_int(ctx, 0);
-
     return 0;
 }
 
@@ -79,7 +78,9 @@ duk_ret_t bitsy_set_color(duk_context *ctx)
     int g = duk_get_int(ctx, 2);
     int b = duk_get_int(ctx, 3);
 
-    systemPalette[paletteIndex] = (r << 11) | (g << 5) | b;
+    uint16_t color = (r << 11) | (g << 5) | b;
+    ESP_LOGI(TAG, "Setting color (hex: %s) (binary: %s)", itoa(color, (char[17]){0}, 16), itoa(color, (char[17]){0}, 2));
+    systemPalette[paletteIndex] = color;
 
     return 0;
 }
@@ -90,6 +91,7 @@ duk_ret_t bitsy_reset_colors(duk_context *ctx)
     {
         systemPalette[i] = 0;
     }
+    ESP_LOGI(TAG, "Reset colors");
 
     return 0;
 }
@@ -273,6 +275,7 @@ duk_ret_t bitsy_add_tile(duk_context *ctx)
     {
         ESP_LOGE(TAG, "Failed to allocate memory for tile buffer");
     }
+    ESP_LOGI(TAG, "Allocated memory for tile buffer %d", nextBufferId);
 
     duk_push_int(ctx, nextBufferId);
 
@@ -284,29 +287,49 @@ duk_ret_t bitsy_add_tile(duk_context *ctx)
 duk_ret_t bitsy_reset_tiles(duk_context *ctx)
 {
     nextBufferId = tileStartBufferId;
+    ESP_LOGI(TAG, "Reset tiles");
 
     return 0;
 }
 
-duk_ret_t bitsy_set_textbox_size(duk_context *ctx)
+duk_ret_t bitsy_set_textbox_size(duk_context* ctx)
 {
-    textboxWidth = duk_get_int(ctx, 0);
-    textboxHeight = duk_get_int(ctx, 1);
+    // Get the new textbox width and height from the context
+    int newTextboxWidth = duk_get_int(ctx, 0);
+    int newTextboxHeight = duk_get_int(ctx, 1);
 
-    heap_caps_free(drawingBuffers[TEXTBOX_BUFFER_ID]);
-    drawingBuffers[TEXTBOX_BUFFER_ID] = heap_caps_malloc(textboxWidth * textboxHeight * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
-    if (!drawingBuffers[TEXTBOX_BUFFER_ID])
-    {
-        ESP_LOGE(TAG, "Failed to allocate memory for textbox buffer");
+    if (newTextboxWidth == textboxWidth && newTextboxHeight == textboxHeight) {
+        // No change in textbox size
+        return 0;
     }
 
-    return 0;
+    // Free the old buffer if it exists to avoid memory leaks
+    if (drawingBuffers[TEXTBOX_BUFFER_ID] != NULL) {
+        free(drawingBuffers[TEXTBOX_BUFFER_ID]);
+    }
+
+    // Allocate new buffer based on the new textbox size and scale
+    int bufferSize = textboxWidth * TEXTBOX_RENDER_SCALE * textboxHeight * TEXTBOX_RENDER_SCALE * sizeof(uint16_t);
+    drawingBuffers[TEXTBOX_BUFFER_ID] = (uint16_t*) malloc(bufferSize);
+
+    if (drawingBuffers[TEXTBOX_BUFFER_ID] == NULL) {
+        // Handle allocation failure
+        return DUK_RET_ERROR;  // Return an error if memory allocation fails
+    }
+
+    // Clear the new buffer (initialize with some color, or leave as zero)
+    memset(drawingBuffers[TEXTBOX_BUFFER_ID], 0, bufferSize);
+
+    ESP_LOGI(TAG, "Set textbox size to %d x %d", textboxWidth, textboxHeight);
+
+    return 0;  // Return success
 }
 
 duk_ret_t bitsy_on_load(duk_context *ctx)
 {
     // hacky to just stick it in the global namespace??
     duk_put_global_string(ctx, "__bitsybox_on_load__");
+    ESP_LOGI(TAG, "LOADING");
 
     return 0;
 }
@@ -314,7 +337,7 @@ duk_ret_t bitsy_on_load(duk_context *ctx)
 duk_ret_t bitsy_on_quit(duk_context *ctx)
 {
     duk_put_global_string(ctx, "__bitsybox_on_quit__");
-
+    ESP_LOGI(TAG, "QUITTING");
     return 0;
 }
 

@@ -12,7 +12,7 @@ var DialogRenderer = function() {
 
 	// TODO : refactor this eventually? remove everything from struct.. avoid the defaults?
 	var textboxInfo = {
-		width : 104,
+		width : 52,
 		height : 8+4+2+5, //8 for text, 4 for top-bottom padding, 2 for line padding, 5 for arrow
 		top : 12,
 		left : 12,
@@ -501,7 +501,7 @@ var DialogBuffer = function() {
 		return width;
 	}
 
-	var pixelsPerRow = 192; // hard-coded fun times!!!
+	var pixelsPerRow = 100;
 
 	this.AddScriptReturn = function(onReturnHandler) {
 		var curPageIndex = buffer.length - 1;

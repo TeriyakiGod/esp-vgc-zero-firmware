@@ -37,28 +37,6 @@ bool isButtonPadX = false;
 bool isButtonPadY = false;
 bool isButtonPadStart = false;
 
-// Interrupt handler
-static void IRAM_ATTR gpio_isr_handler(void* arg) {
-    uint32_t gpio_num = (uint32_t) arg;
-
-    switch (gpio_num) {
-        case 2:
-            isButtonUp = !isButtonUp;  // Toggle state
-            break;
-        case 4:
-            isButtonDown = !isButtonDown;  // Toggle state
-            break;
-        case 12:
-            isButtonLeft = !isButtonLeft;  // Toggle state
-            break;
-        case 13:
-            isButtonRight = !isButtonRight;  // Toggle state
-            break;
-        default:
-            break;
-    }
-}
-
 // Initialize GPIO input pins
 void init_input_gpio(void) {
     gpio_config_t io_conf = {};
@@ -72,20 +50,13 @@ void init_input_gpio(void) {
     ESP_LOGI(TAG, "GPIO inputs configured with pull-down.");
 }
 
-// Install and configure GPIO interrupts
-void init_input_interrupts(void) {
-    gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
-    
-    // Attach interrupts for each GPIO
-    gpio_isr_handler_add(2, gpio_isr_handler, (void*) 2);
-    gpio_isr_handler_add(4, gpio_isr_handler, (void*) 4);
-    gpio_isr_handler_add(12, gpio_isr_handler, (void*) 12);
-    gpio_isr_handler_add(13, gpio_isr_handler, (void*) 13);
-
-    ESP_LOGI(TAG, "GPIO interrupts installed.");
+void get_input(void){
+    isButtonUp = gpio_get_level(2);
+    isButtonDown = gpio_get_level(4);
+    isButtonLeft = gpio_get_level(12);
+    isButtonRight = gpio_get_level(13);
 }
 
 void init_input(void) {
     init_input_gpio();
-    init_input_interrupts();
 }

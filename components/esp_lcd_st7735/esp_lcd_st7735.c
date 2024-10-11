@@ -185,10 +185,7 @@ st7735_lcd_init_cmd_t st7735_init_cmds[] = {
     {ST7735_PWCTR5, (uint8_t[]){0x8A, 0xEE}, 2, 0},                                                                                       // Power control
     {ST7735_VMCTR1, (uint8_t[]){0x0E}, 1, 0},                                                                                             // Power control
     {ST7735_INVOFF, (uint8_t[]){0x00}, 1, 0},                                                                                             // Don't invert display
-    {ST7735_MADCTL, (uint8_t[]){0x00}, 1, 0},                                                                       // Memory access control
     {ST7735_COLMOD, (uint8_t[]){0x05}, 1, 0},                                                                                             // Set color mode (16-bit)
-    {ST7735_CASET, (uint8_t[]){0x00, 0x02, 0x00, 0x7F + 0x02}, 4, 0},                                                                     // Column addr set
-    {ST7735_RASET, (uint8_t[]){0x00, 0x01, 0x00, 0x9F + 0x01}, 4, 0},                                                                     // Row addr set
     {ST7735_GMCTRP1, (uint8_t[]){0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29, 0x25, 0x2B, 0x39, 0x00, 0x01, 0x03, 0x10}, 16, 0}, // Positive Gamma
     {ST7735_GMCTRN1, (uint8_t[]){0x03, 0x1d, 0x07, 0x06, 0x2E, 0x2C, 0x29, 0x2D, 0x2E, 0x2E, 0x37, 0x3F, 0x00, 0x00, 0x02, 0x10}, 16, 0}, // Negative Gamma
     {ST7735_NORON, (uint8_t[]){0x00}, 1, TFT_INIT_DELAY},                                                                                 // Normal display on, no args, w/delay 10 ms delay

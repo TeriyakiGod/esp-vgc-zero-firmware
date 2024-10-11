@@ -48,6 +48,7 @@ extern bool isButtonPadY;
 extern bool isButtonPadStart;
 
 void init_input(void);
+void get_input(void);
 
 /* API */
 duk_ret_t bitsy_log(duk_context *ctx);
