@@ -1,7 +1,4 @@
 #include "bitsybox.h"
-#include <esp_log.h>
-#include <esp_err.h>
-#include <esp_heap_caps.h>
 
 static const char *TAG = "BitsyAPI";
 
@@ -78,8 +75,8 @@ duk_ret_t bitsy_set_color(duk_context *ctx)
     int g = duk_get_int(ctx, 2);
     int b = duk_get_int(ctx, 3);
 
-    uint16_t color = (r << 11) | (g << 5) | b;
-    ESP_LOGI(TAG, "Setting color (hex: %s) (binary: %s)", itoa(color, (char[17]){0}, 16), itoa(color, (char[17]){0}, 2));
+    lv_color_t color = lv_color_make(r, g, b);
+
     systemPalette[paletteIndex] = color;
 
     return 0;
@@ -89,7 +86,7 @@ duk_ret_t bitsy_reset_colors(duk_context *ctx)
 {
     for (int i = 0; i < SYSTEM_PALETTE_MAX; i++)
     {
-        systemPalette[i] = 0;
+        systemPalette[i] = lv_color_black();
     }
     ESP_LOGI(TAG, "Reset colors");
 
@@ -114,7 +111,7 @@ duk_ret_t bitsy_draw_pixel(duk_context *ctx)
     int x = duk_get_int(ctx, 1);
     int y = duk_get_int(ctx, 2);
 
-    uint16_t color = systemPalette[paletteIndex];
+    lv_color_t color = systemPalette[paletteIndex];
 
     // Apply render scale
     int scaledX = x * RENDER_SCALE;
@@ -174,7 +171,7 @@ duk_ret_t bitsy_draw_tile(duk_context *ctx)
     // Iterate over each pixel of the tile and draw it to the screen buffer
     for (int ty = 0; ty < TILE_SIZE; ty++) {
         for (int tx = 0; tx < TILE_SIZE; tx++) {
-            uint16_t color = drawingBuffers[tileId][ty * TILE_SIZE + tx]; // Get the pixel color from the tile buffer
+            lv_color_t color = drawingBuffers[tileId][ty * TILE_SIZE + tx]; // Get the pixel color from the tile buffer
 
             // Scale the pixel drawing using RENDER_SCALE
             for (int i = 0; i < RENDER_SCALE; i++) {
@@ -209,7 +206,7 @@ duk_ret_t bitsy_draw_textbox(duk_context* ctx)
     // Iterate over each pixel of the textbox buffer and scale it
     for (int ty = 0; ty < textboxHeight; ty++) {
         for (int tx = 0; tx < textboxWidth; tx++) {
-            uint16_t color = drawingBuffers[TEXTBOX_BUFFER_ID][ty * textboxWidth + tx]; // Get the pixel color from the textbox buffer
+            lv_color_t color = drawingBuffers[TEXTBOX_BUFFER_ID][ty * textboxWidth + tx]; // Get the pixel color from the textbox buffer
 
             // Scale the pixel drawing using TEXTBOX_RENDER_SCALE
             for (int i = 0; i < TEXTBOX_RENDER_SCALE; i++) {
@@ -231,7 +228,7 @@ duk_ret_t bitsy_clear(duk_context* ctx)
 {
     int paletteIndex = duk_get_int(ctx, 0);
 
-    uint16_t color = systemPalette[paletteIndex];
+    lv_color_t color = systemPalette[paletteIndex];
 
     // Clear the screen buffer
     if (curBufferId == 0) {
@@ -269,8 +266,14 @@ duk_ret_t bitsy_add_tile(duk_context *ctx)
         return 0;
     }
 
+    // free memory if it exists
+    if (drawingBuffers[nextBufferId] != NULL)
+    {
+        heap_caps_free(drawingBuffers[nextBufferId]);
+    }
+
     // allocate a new tile buffer
-    drawingBuffers[nextBufferId] = heap_caps_malloc(TILE_SIZE * TILE_SIZE * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+    drawingBuffers[nextBufferId] = heap_caps_malloc(TILE_SIZE * TILE_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
     if (!drawingBuffers[nextBufferId])
     {
         ESP_LOGE(TAG, "Failed to allocate memory for tile buffer");
@@ -305,12 +308,12 @@ duk_ret_t bitsy_set_textbox_size(duk_context* ctx)
 
     // Free the old buffer if it exists to avoid memory leaks
     if (drawingBuffers[TEXTBOX_BUFFER_ID] != NULL) {
-        free(drawingBuffers[TEXTBOX_BUFFER_ID]);
+        heap_caps_free(drawingBuffers[TEXTBOX_BUFFER_ID]);
     }
 
     // Allocate new buffer based on the new textbox size and scale
-    int bufferSize = textboxWidth * TEXTBOX_RENDER_SCALE * textboxHeight * TEXTBOX_RENDER_SCALE * sizeof(uint16_t);
-    drawingBuffers[TEXTBOX_BUFFER_ID] = (uint16_t*) malloc(bufferSize);
+    int bufferSize = textboxWidth * TEXTBOX_RENDER_SCALE * textboxHeight * TEXTBOX_RENDER_SCALE * sizeof(lv_color_t);
+    drawingBuffers[TEXTBOX_BUFFER_ID] = (lv_color_t*) heap_caps_malloc(bufferSize, MALLOC_CAP_SPIRAM);
 
     if (drawingBuffers[TEXTBOX_BUFFER_ID] == NULL) {
         // Handle allocation failure

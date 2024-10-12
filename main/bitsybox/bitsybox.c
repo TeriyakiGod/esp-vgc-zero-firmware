@@ -1,22 +1,16 @@
 #include "bitsybox.h"
-#include <stdio.h>
-#include "esp_log.h"
 #include "esp_system.h"
 #include "esp_timer.h"
-#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "display.h"
 
 static const char *TAG = "BitsyBox";
 
-uint16_t systemPalette[SYSTEM_PALETTE_MAX];
-uint16_t *drawingBuffers[SYSTEM_DRAWING_BUFFER_MAX];
+lv_color_t systemPalette[SYSTEM_PALETTE_MAX];
+lv_color_t *drawingBuffers[SYSTEM_DRAWING_BUFFER_MAX];
 
-typedef enum
-{
-    FILETYPE_SCRIPT,
-    FILETYPE_FILE
-} filetype_t;
+lv_obj_t *canvas;
+lv_color_t *canvas_buffer;
 
 static void log_mem()
 {
@@ -44,77 +38,78 @@ static void duk_fatal_error(void *udata, const char *msg)
     ESP_LOGE(TAG, "Fatal error: %s", msg);
 }
 
-bool duk_load(duk_context *ctx, const char *filepath, filetype_t type, const char *variableName)
-{
-    bool success = true;
+bool duk_load_precompiled_script(duk_context *ctx, const char *filepath) {
+    FILE *f = fopen(filepath, "rb");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open bytecode file: %s", filepath);
+        return false;
+    }
 
-    ESP_LOGI(TAG, "Loading: %s", filepath);
+    fseek(f, 0, SEEK_END);
+    long length = ftell(f);
+    fseek(f, 0, SEEK_SET);
 
-    char *fileBuffer = 0;
-    long length;
-    FILE *f = fopen(filepath, "r");
-
-    if (f)
-    {
-        fseek(f, 0, SEEK_END);
-
-        length = ftell(f);
-
-        fseek(f, 0, SEEK_SET);
-
-        // length +1 to make sure there's room for null terminator
-        fileBuffer = heap_caps_malloc(length + 1, MALLOC_CAP_SPIRAM);
-
-        if (fileBuffer)
-        {
-            // replace seek length with read length
-            length = fread(fileBuffer, 1, length, f);
-
-            // ensure null terminator
-            fileBuffer[length] = '\0';
-        }
-        else
-        {
-            ESP_LOGE(TAG, "Failed to allocate memory for file: %s", filepath);
-            success = false;
-        }
-
+    // Allocate memory for the bytecode
+    char *bytecode = heap_caps_malloc(length, MALLOC_CAP_SPIRAM);
+    if (bytecode) {
+        fread(bytecode, 1, length, f);
         fclose(f);
-    }
-    else
-    {
-        ESP_LOGE(TAG, "Failed to open file: %s", filepath);
-        success = false;
-    }
-    if (fileBuffer)
-    {
-        // Push the file contents onto the Duktape stack
-        duk_push_lstring(ctx, (const char *)fileBuffer, (duk_size_t)length);
 
-        if (type == FILETYPE_SCRIPT)
-        {
-            // Load the script and check for errors
-            if (duk_peval(ctx) != 0)
-            {
-                ESP_LOGE(TAG, "Load Script Error: %s\n", duk_safe_to_string(ctx, -1));
-                success = false;
-            }
-            else
-            {
-                success = true;
-            }
-            // Pop the result off the stack
-            duk_pop(ctx);
+        // Push bytecode as a buffer, not as a string
+        void *buf = duk_push_fixed_buffer(ctx, length);
+        memcpy(buf, bytecode, length);
+
+        // Load the precompiled function from the bytecode buffer
+        duk_load_function(ctx);
+
+        // Execute the loaded function (e.g., global scope)
+        if (duk_pcall(ctx, 0) != 0) {
+            ESP_LOGE(TAG, "Bytecode execution error: %s\n", duk_safe_to_string(ctx, -1));
+            heap_caps_free(bytecode);
+            return false;
         }
-        else
-        {
-            // Load the font as a string onto the Duktape stack
-            duk_put_global_string(ctx, variableName);
-        }
-        free(fileBuffer);
+
+        // Free the bytecode buffer
+        heap_caps_free(bytecode);
+    } else {
+        ESP_LOGE(TAG, "Failed to allocate memory for bytecode.");
+        fclose(f);
+        return false;
     }
-    // todo: use duk_compile instead?
-    return success;
+
+    return true;
+}
+
+bool duk_load_file(duk_context *ctx, const char *filepath, const char *globalName)
+{
+    FILE *f = fopen(filepath, "rb");
+    if (!f) {
+        ESP_LOGE(TAG, "Failed to open font file: %s", filepath);
+        return false;
+    }
+
+    fseek(f, 0, SEEK_END);
+    long length = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *fontData = heap_caps_malloc(length, MALLOC_CAP_SPIRAM);
+    if (fontData) {
+        fread(fontData, 1, length, f);
+        fclose(f);
+
+        // Load the font data onto the Duktape stack
+        duk_push_lstring(ctx, fontData, length);
+        duk_put_global_string(ctx, globalName);
+
+        // Free font data buffer after loading
+        heap_caps_free(fontData);
+    } else {
+        ESP_LOGE(TAG, "Failed to allocate memory for font data.");
+        fclose(f);
+        return false;
+    }
+
+    return true;
 }
 
 bool duk_load_bitsy_engine(duk_context *ctx)
@@ -123,16 +118,16 @@ bool duk_load_bitsy_engine(duk_context *ctx)
 
     // load engine scripts
     const char *scripts[] = {
-        "/spiflash/bitsy/engine/script.js",
-        "/spiflash/bitsy/engine/font.js",
-        "/spiflash/bitsy/engine/transition.js",
-        "/spiflash/bitsy/engine/dialog.js",
-        "/spiflash/bitsy/engine/renderer.js",
-        "/spiflash/bitsy/engine/bitsy.js"};
+        "/spiflash/bitsy/engine/script.bin",
+        "/spiflash/bitsy/engine/font.bin",
+        "/spiflash/bitsy/engine/transition.bin",
+        "/spiflash/bitsy/engine/dialog.bin",
+        "/spiflash/bitsy/engine/renderer.bin",
+        "/spiflash/bitsy/engine/bitsy.bin"};
 
     for (int i = 0; i < sizeof(scripts) / sizeof(scripts[0]); i++)
     {
-        if (!duk_load(ctx, scripts[i], FILETYPE_SCRIPT, NULL))
+        if (!duk_load_precompiled_script(ctx, scripts[i]))
         {
             ESP_LOGE(TAG, "Failed to load script: %s", scripts[i]);
             success = false;
@@ -141,7 +136,7 @@ bool duk_load_bitsy_engine(duk_context *ctx)
 
     // load font
     const char *font_path = "/spiflash/bitsy/font/ascii_small.bitsyfont";
-    if (!duk_load(ctx, font_path, FILETYPE_FILE, "__bitsybox_default_font__"))
+    if (!duk_load_file(ctx, font_path, "__bitsybox_default_font__"))
     {
         ESP_LOGE(TAG, "Failed to load font: %s", font_path);
         success = false;
@@ -177,7 +172,24 @@ void duk_run_bitsy_game_loop(duk_context *ctx)
         duk_pop(ctx);
 
         // Draw screen buffer to LCD
-        ESP_ERROR_CHECK(vgc_lcd_draw_bitmap(0, 0, SCREEN_SIZE, SCREEN_SIZE, drawingBuffers[SCREEN_BUFFER_ID]));
+        lvgl_port_lock(0);
+        lv_layer_t layer;
+        lv_canvas_init_layer(canvas, &layer);
+        // copy screen buffer to canvas buffer
+        for (int i = 0; i < SCREEN_SIZE * SCREEN_SIZE; i++)
+        {
+            lv_canvas_set_px(canvas, i % SCREEN_SIZE, i / SCREEN_SIZE, drawingBuffers[SCREEN_BUFFER_ID][i], LV_OPA_COVER);
+        }
+        lv_canvas_finish_layer(canvas, &layer);
+        lvgl_port_unlock();
+
+        // Exit game if all buttons are pressed
+        if (isButtonUp && isButtonDown && isButtonLeft && isButtonRight)
+        {
+            // set game over flag
+            duk_peval_string(ctx, "__bitsybox_is_game_over__ = true;");
+            duk_pop(ctx);
+        }
 
         // Check if game over
         if (duk_peval_string(ctx, "__bitsybox_is_game_over__") != 0)
@@ -199,12 +211,21 @@ void duk_run_bitsy_game_loop(duk_context *ctx)
 void app_duktape_bitsy()
 {
     // Initialize system palette
-    systemPalette[0] = (31 << 11) | (0 << 5) | 0;         // Red
-    systemPalette[1] = (0 << 11) | (31 << 5) | 0;         // Green
-    systemPalette[2] = (0 << 11) | (0 << 5) | 31;         // Blue
+    systemPalette[0] = lv_color_make(255, 0, 0); // red
+    systemPalette[1] = lv_color_make(0, 255, 0); // green
+    systemPalette[2] = lv_color_make(0, 0, 255); // blue
+
+    canvas_buffer = heap_caps_malloc(128 * 128 * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);
+
+    lvgl_port_lock(0);
+    canvas = lv_canvas_create(lv_scr_act());
+    lv_canvas_set_buffer(canvas, canvas_buffer, 128, 128, LV_COLOR_FORMAT_RGB565);
+    lv_obj_center(canvas);
+    lv_canvas_fill_bg(canvas, lv_color_make(0, 0, 255), LV_OPA_COVER);
+    lvgl_port_unlock();
 
     // Initialize drawing buffers
-    drawingBuffers[0] = heap_caps_malloc(SCREEN_SIZE * SCREEN_SIZE * sizeof(uint16_t), MALLOC_CAP_DMA);  // screen buffer
+    drawingBuffers[0] = heap_caps_malloc(SCREEN_SIZE * SCREEN_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);  // screen buffer
     if (drawingBuffers[0] == NULL) {
         ESP_LOGE(TAG, "Failed to allocate memory for screen buffer");
         return;
@@ -212,7 +233,7 @@ void app_duktape_bitsy()
 
     log_mem();
 
-    drawingBuffers[1] = heap_caps_malloc(104 * 38 * sizeof(uint16_t), MALLOC_CAP_DMA);  // textbox buffer
+    drawingBuffers[1] = heap_caps_malloc(104 * 38 * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);  // textbox buffer
     if (drawingBuffers[1] == NULL) {
         ESP_LOGE(TAG, "Failed to allocate memory for textbox buffer");
         heap_caps_free(drawingBuffers[0]);
@@ -250,7 +271,7 @@ void app_duktape_bitsy()
 
     // Load game data
     const char *gameFilePath = "/spiflash/bitsy/games/mossland.bitsy";
-    if (!duk_load(ctx, gameFilePath, FILETYPE_FILE, "__bitsybox_game_data__"))
+    if (!duk_load_file(ctx, gameFilePath, "__bitsybox_game_data__"))
     {
         ESP_LOGE(TAG, "Failed to load game data: %s", gameFilePath);
         return;
@@ -267,6 +288,7 @@ void app_duktape_bitsy()
     log_mem();
 
     // Free buffers
+    heap_caps_free(canvas_buffer);
     for (int i = 0; i < SYSTEM_DRAWING_BUFFER_MAX; i++)
     {
         if (drawingBuffers[i])

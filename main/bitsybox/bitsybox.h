@@ -1,9 +1,15 @@
 #ifndef BITSYBOX_H
 #define BITSYBOX_H
 
+#include <stdio.h>
 #include <stdint.h>
-#include <duktape.h>
 #include <stdbool.h>
+#include <esp_log.h>
+#include <esp_err.h>
+#include <esp_heap_caps.h>
+#include <lvgl.h>
+#include <esp_lvgl_port.h>
+#include <duktape.h>
 
 #define SYSTEM_PALETTE_MAX 256
 #define SYSTEM_DRAWING_BUFFER_MAX 1024
@@ -17,8 +23,8 @@
 #define SCREEN_BUFFER_ID 0
 #define TEXTBOX_BUFFER_ID 1
 
-extern uint16_t systemPalette[SYSTEM_PALETTE_MAX];
-extern uint16_t *drawingBuffers[SYSTEM_DRAWING_BUFFER_MAX];
+extern lv_color_t systemPalette[SYSTEM_PALETTE_MAX];
+extern lv_color_t *drawingBuffers[SYSTEM_DRAWING_BUFFER_MAX];
 
 /* INPUT */
 extern bool isButtonUp;

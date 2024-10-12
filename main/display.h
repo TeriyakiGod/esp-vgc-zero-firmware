@@ -14,7 +14,7 @@
 #define VGC_LCD_PIXEL_CLK_HZ (40 * 1000 * 1000)
 #define VGC_LCD_CMD_BITS (8)
 #define VGC_LCD_PARAM_BITS (8)
-#define VGC_LCD_ELEMENT_ORDER (LCD_RGB_ELEMENT_ORDER_RGB)
+#define VGC_LCD_ELEMENT_ORDER (LCD_RGB_ELEMENT_ORDER_BGR)
 #define VGC_LCD_BITS_PER_PIXEL (16)
 #define VGC_LCD_DRAW_BUFF_DOUBLE (1)
 #define VGC_LCD_DRAW_BUFF_HEIGHT (50)
@@ -36,9 +36,5 @@ esp_err_t vgc_lcd_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, ui
 
 esp_err_t vgc_lvgl_init();
 esp_err_t vgc_lvgl_deinit();
-
-void vgc_esp_lcd_test();
-void vgc_lvgl_hello_world();
-void vgc_lvgl_color_test();
 
 #endif // DISPLAY_H
