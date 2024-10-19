@@ -1,0 +1,3 @@
+[submodule "utils/bitsy-engine"]
+	path = utils/bitsy-engine
+	url = git@github.com:TeriyakiGod/bitsy-engine.git
