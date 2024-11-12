@@ -11,6 +11,9 @@
 #include <esp_lvgl_port.h>
 #include <duktape.h>
 
+#define GAME_DATA_FILE_PATH "/spiflash/bitsy/games/mossland.bitsy"
+#define FONT_FILE_PATH "/spiflash/bitsy/font/ascii_small.bitsyfont"
+
 #define SYSTEM_PALETTE_MAX 256
 #define SYSTEM_DRAWING_BUFFER_MAX 1024
 
@@ -23,6 +26,11 @@
 #define SCREEN_BUFFER_ID 0
 #define TEXTBOX_BUFFER_ID 1
 
+#define MAX_VOLUME 15
+#define BASE_GAIN 0.01
+#define BASE_FREQUENCY 100  // Base frequency in Hz
+
+// VIDEO 
 extern lv_color_t systemPalette[SYSTEM_PALETTE_MAX];
 extern lv_color_t *drawingBuffers[SYSTEM_DRAWING_BUFFER_MAX];
 
@@ -31,27 +39,7 @@ extern bool isButtonUp;
 extern bool isButtonDown;
 extern bool isButtonLeft;
 extern bool isButtonRight;
-extern bool isButtonW;
-extern bool isButtonA;
-extern bool isButtonS;
-extern bool isButtonD;
-extern bool isButtonR;
-extern bool isButtonSpace;
-extern bool isButtonReturn;
-extern bool isButtonEscape;
-extern bool isButtonLCtrl;
-extern bool isButtonRCtrl;
-extern bool isButtonLAlt;
-extern bool isButtonRAlt;
-extern bool isButtonPadUp;
-extern bool isButtonPadDown;
-extern bool isButtonPadLeft;
-extern bool isButtonPadRight;
-extern bool isButtonPadA;
-extern bool isButtonPadB;
-extern bool isButtonPadX;
-extern bool isButtonPadY;
-extern bool isButtonPadStart;
+extern bool isButtonMenu;
 
 void init_input(void);
 void get_input(void);

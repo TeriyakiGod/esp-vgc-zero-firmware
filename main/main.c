@@ -9,6 +9,7 @@ static const char *TAG = "VGC";
 
 void app_main(void)
 {
+    ESP_LOGI(TAG, "VGC starting...");
     // Init FS
     ESP_ERROR_CHECK(vgc_fs_init());
 

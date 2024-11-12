@@ -15,27 +15,7 @@ bool isButtonUp = false;
 bool isButtonDown = false;
 bool isButtonLeft = false;
 bool isButtonRight = false;
-bool isButtonW = false;
-bool isButtonA = false;
-bool isButtonS = false;
-bool isButtonD = false;
-bool isButtonR = false;
-bool isButtonSpace = false;
-bool isButtonReturn = false;
-bool isButtonEscape = false;
-bool isButtonLCtrl = false;
-bool isButtonRCtrl = false;
-bool isButtonLAlt = false;
-bool isButtonRAlt = false;
-bool isButtonPadUp = false;
-bool isButtonPadDown = false;
-bool isButtonPadLeft = false;
-bool isButtonPadRight = false;
-bool isButtonPadA = false;
-bool isButtonPadB = false;
-bool isButtonPadX = false;
-bool isButtonPadY = false;
-bool isButtonPadStart = false;
+bool isButtonMenu = false;
 
 // Initialize GPIO input pins
 void init_input_gpio(void) {

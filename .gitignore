@@ -10,3 +10,5 @@ managed_components/
 *.bak
 *.swp
 .DS_Store
+
+tmp

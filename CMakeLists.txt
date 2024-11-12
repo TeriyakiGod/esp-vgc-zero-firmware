@@ -7,4 +7,10 @@ project(esp-vgc-zero-firmware)
 
 set(EXTRA_COMPONENT_DIRS components)
 
+add_custom_target(
+    compile-js ALL
+    COMMAND ${CMAKE_COMMAND} -E env bash ${CMAKE_SOURCE_DIR}/compile-js.sh
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+)
+
 fatfs_create_spiflash_image(storage data FLASH_IN_PROJECT)

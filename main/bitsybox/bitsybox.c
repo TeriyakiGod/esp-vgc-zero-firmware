@@ -6,9 +6,6 @@
 
 static const char *TAG = "BitsyBox";
 
-lv_color_t systemPalette[SYSTEM_PALETTE_MAX];
-lv_color_t *drawingBuffers[SYSTEM_DRAWING_BUFFER_MAX];
-
 lv_obj_t *canvas;
 lv_color_t *canvas_buffer;
 
@@ -38,9 +35,11 @@ static void duk_fatal_error(void *udata, const char *msg)
     ESP_LOGE(TAG, "Fatal error: %s", msg);
 }
 
-bool duk_load_precompiled_script(duk_context *ctx, const char *filepath) {
+bool duk_load_precompiled_script(duk_context *ctx, const char *filepath)
+{
     FILE *f = fopen(filepath, "rb");
-    if (!f) {
+    if (!f)
+    {
         ESP_LOGE(TAG, "Failed to open bytecode file: %s", filepath);
         return false;
     }
@@ -51,7 +50,8 @@ bool duk_load_precompiled_script(duk_context *ctx, const char *filepath) {
 
     // Allocate memory for the bytecode
     char *bytecode = heap_caps_malloc(length, MALLOC_CAP_SPIRAM);
-    if (bytecode) {
+    if (bytecode)
+    {
         fread(bytecode, 1, length, f);
         fclose(f);
 
@@ -63,7 +63,8 @@ bool duk_load_precompiled_script(duk_context *ctx, const char *filepath) {
         duk_load_function(ctx);
 
         // Execute the loaded function (e.g., global scope)
-        if (duk_pcall(ctx, 0) != 0) {
+        if (duk_pcall(ctx, 0) != 0)
+        {
             ESP_LOGE(TAG, "Bytecode execution error: %s\n", duk_safe_to_string(ctx, -1));
             heap_caps_free(bytecode);
             return false;
@@ -71,7 +72,9 @@ bool duk_load_precompiled_script(duk_context *ctx, const char *filepath) {
 
         // Free the bytecode buffer
         heap_caps_free(bytecode);
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "Failed to allocate memory for bytecode.");
         fclose(f);
         return false;
@@ -83,7 +86,8 @@ bool duk_load_precompiled_script(duk_context *ctx, const char *filepath) {
 bool duk_load_file(duk_context *ctx, const char *filepath, const char *globalName)
 {
     FILE *f = fopen(filepath, "rb");
-    if (!f) {
+    if (!f)
+    {
         ESP_LOGE(TAG, "Failed to open font file: %s", filepath);
         return false;
     }
@@ -93,7 +97,8 @@ bool duk_load_file(duk_context *ctx, const char *filepath, const char *globalNam
     fseek(f, 0, SEEK_SET);
 
     char *fontData = heap_caps_malloc(length, MALLOC_CAP_SPIRAM);
-    if (fontData) {
+    if (fontData)
+    {
         fread(fontData, 1, length, f);
         fclose(f);
 
@@ -103,7 +108,9 @@ bool duk_load_file(duk_context *ctx, const char *filepath, const char *globalNam
 
         // Free font data buffer after loading
         heap_caps_free(fontData);
-    } else {
+    }
+    else
+    {
         ESP_LOGE(TAG, "Failed to allocate memory for font data.");
         fclose(f);
         return false;
@@ -116,11 +123,14 @@ bool duk_load_bitsy_engine(duk_context *ctx)
 {
     bool success = true;
 
-    // load engine scripts
+    // load system and engine scripts
     const char *scripts[] = {
-        "/spiflash/bitsy/engine/script.bin",
+        "/spiflash/bitsy/system/system.bin",
+        "/spiflash/bitsy/engine/world.bin",
+        "/spiflash/bitsy/engine/sound.bin",
         "/spiflash/bitsy/engine/font.bin",
         "/spiflash/bitsy/engine/transition.bin",
+        "/spiflash/bitsy/engine/script.bin",
         "/spiflash/bitsy/engine/dialog.bin",
         "/spiflash/bitsy/engine/renderer.bin",
         "/spiflash/bitsy/engine/bitsy.bin"};
@@ -225,22 +235,20 @@ void app_duktape_bitsy()
     lvgl_port_unlock();
 
     // Initialize drawing buffers
-    drawingBuffers[0] = heap_caps_malloc(SCREEN_SIZE * SCREEN_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);  // screen buffer
-    if (drawingBuffers[0] == NULL) {
+    drawingBuffers[0] = heap_caps_malloc(SCREEN_SIZE * SCREEN_SIZE * sizeof(lv_color_t), MALLOC_CAP_SPIRAM); // screen buffer
+    if (drawingBuffers[0] == NULL)
+    {
         ESP_LOGE(TAG, "Failed to allocate memory for screen buffer");
         return;
     }
 
-    log_mem();
-
-    drawingBuffers[1] = heap_caps_malloc(104 * 38 * sizeof(lv_color_t), MALLOC_CAP_SPIRAM);  // textbox buffer
-    if (drawingBuffers[1] == NULL) {
+    drawingBuffers[1] = heap_caps_malloc(104 * 38 * sizeof(lv_color_t), MALLOC_CAP_SPIRAM); // textbox buffer
+    if (drawingBuffers[1] == NULL)
+    {
         ESP_LOGE(TAG, "Failed to allocate memory for textbox buffer");
         heap_caps_free(drawingBuffers[0]);
         return;
     }
-
-    log_mem();
 
     // Create Duktape heap
     duk_context *ctx = NULL;
@@ -270,10 +278,9 @@ void app_duktape_bitsy()
     ESP_LOGI(TAG, "Bitsy engine loaded");
 
     // Load game data
-    const char *gameFilePath = "/spiflash/bitsy/games/mossland.bitsy";
-    if (!duk_load_file(ctx, gameFilePath, "__bitsybox_game_data__"))
+    if (!duk_load_file(ctx, GAME_DATA_FILE_PATH, "__bitsybox_game_data__"))
     {
-        ESP_LOGE(TAG, "Failed to load game data: %s", gameFilePath);
+        ESP_LOGE(TAG, "Failed to load game data: %s", GAME_DATA_FILE_PATH);
         return;
     }
 
