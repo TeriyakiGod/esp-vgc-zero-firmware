@@ -131,8 +131,13 @@ esp_err_t vgc_lvgl_init()
             .swap_bytes = true,
         }};
     vgc_display = lvgl_port_add_disp(&disp_cfg);
-
+    
     return ESP_OK;
+}
+
+esp_err_t vgc_lcd_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap)
+{
+    return esp_lcd_panel_draw_bitmap(vgc_lcd_panel_handle, x, y, w, h, bitmap);
 }
 
 esp_err_t vgc_lcd_deinit()
@@ -149,11 +154,6 @@ esp_err_t vgc_lcd_deinit()
     ESP_ERROR_CHECK(spi_bus_free(VGC_LCD_SPI_NUM));
 
     return ret;
-}
-
-esp_err_t vgc_lcd_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap)
-{
-    return esp_lcd_panel_draw_bitmap(vgc_lcd_panel_handle, x, y, w, h, bitmap);
 }
 
 esp_err_t vgc_lvgl_deinit()
