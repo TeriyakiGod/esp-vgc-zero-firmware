@@ -32,7 +32,7 @@ extern bool isButtonRight;
 
 void init_input_gpio(void);
 
-/* API */
+/* bitsy Interface */
 duk_ret_t bitsy_log(duk_context *ctx);
 duk_ret_t bitsy_get_button(duk_context *ctx);
 duk_ret_t bitsy_set_graphics_mode(duk_context *ctx);
@@ -51,6 +51,16 @@ duk_ret_t bitsy_on_load(duk_context *ctx);
 duk_ret_t bitsy_on_quit(duk_context *ctx);
 duk_ret_t bitsy_on_update(duk_context *ctx);
 void duk_register_bitsy_api(duk_context *ctx);
+
+/* Duktape Interface */
+void duk_init_bitsy_system(duk_context *ctx);
+void duk_init_bitsy_game(duk_context *ctx);
+void duk_update_game_state(duk_context *ctx);
+void duk_quit_bitsy_game(duk_context *ctx);
+void duk_deinit_bitsy_system(void);
+void duk_destroy_heap(duk_context *ctx);
+duk_context *duk_init_duktape_heap(void);
+
 
 /* TASK */
 void vBitsyEngineTask(void *pvParameters);
