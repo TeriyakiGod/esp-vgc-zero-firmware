@@ -11,6 +11,7 @@
 #include "esp_lvgl_port.h"
 #include "esp_lcd_st7735.h"
 #include "lvgl.h"
+#include "esp_attr.h"
 
 static const char *TAG = "LCD";
 
@@ -20,6 +21,9 @@ static esp_lcd_panel_handle_t vgc_lcd_panel_handle = NULL;
 
 /* LVGL display and touch */
 static lv_display_t *vgc_display = NULL;
+
+lv_obj_t *vgc_canvas = NULL;
+uint16_t *vgc_canvas_buffer = NULL;
 
 esp_err_t vgc_lcd_clear(){
     // fill screen with black
@@ -98,6 +102,15 @@ err:
     return ret;
 }
 
+void init_canvas()
+{
+    vgc_canvas_buffer = heap_caps_malloc(VGC_LCD_H_RES * VGC_LCD_V_RES * sizeof(uint16_t), MALLOC_CAP_SPIRAM);
+    vgc_canvas = lv_canvas_create(lv_screen_active());
+    lv_canvas_set_buffer(vgc_canvas, vgc_canvas_buffer, VGC_LCD_H_RES, VGC_LCD_V_RES, LV_COLOR_FORMAT_RGB565);
+    lv_obj_align(vgc_canvas, LV_ALIGN_CENTER, 0, 0);
+    lv_canvas_fill_bg(vgc_canvas, lv_color_black(), LV_OPA_COVER);
+}
+
 esp_err_t vgc_lvgl_init()
 {
     /* Initialize LVGL */
@@ -128,16 +141,19 @@ esp_err_t vgc_lvgl_init()
         },
         .flags = {
             .buff_dma = true,
-            .swap_bytes = true,
+            .swap_bytes = false,
         }};
     vgc_display = lvgl_port_add_disp(&disp_cfg);
+    init_canvas();
     
     return ESP_OK;
 }
 
-esp_err_t vgc_lcd_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap)
+void IRAM_ATTR vgc_lcd_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap)
 {
-    return esp_lcd_panel_draw_bitmap(vgc_lcd_panel_handle, x, y, w, h, bitmap);
+    memcpy(vgc_canvas_buffer, bitmap, w * h * sizeof(uint16_t));
+    lv_obj_invalidate(vgc_canvas);
+    lv_refr_now(vgc_display);
 }
 
 esp_err_t vgc_lcd_deinit()

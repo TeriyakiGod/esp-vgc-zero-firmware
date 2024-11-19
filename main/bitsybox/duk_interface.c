@@ -2,6 +2,7 @@
 #include "duktape.h"
 #include "esp_log.h"
 #include "esp_err.h"
+#include "esp_attr.h"
 
 static const char *TAG = "DuktapeInterface";
 
@@ -167,13 +168,14 @@ void duk_init_bitsy_game(duk_context *ctx)
     duk_load_game(ctx);
 }
 
-void duk_update_game_state(duk_context *ctx)
+void IRAM_ATTR duk_update_game_state(duk_context *ctx)
 {
-    if (duk_peval_string(ctx, "__bitsybox_on_update__();") != 0)
+    duk_get_global_string(ctx, "__bitsybox_on_update__"); // Get function reference
+    if (duk_pcall(ctx, 0) != DUK_EXEC_SUCCESS)
     {
         printf("Update Bitsy Error: %s\n", duk_safe_to_string(ctx, -1));
     }
-    duk_pop(ctx);
+    duk_pop(ctx); // Clean up the stack
 }
 
 void duk_check_game_over(duk_context *ctx)

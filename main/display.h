@@ -32,7 +32,7 @@ esp_err_t vgc_lcd_clear();
 
 esp_err_t vgc_lcd_init();
 esp_err_t vgc_lcd_deinit();
-esp_err_t vgc_lcd_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap);
+void vgc_lcd_draw_bitmap(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t *bitmap);
 
 esp_err_t vgc_lvgl_init();
 esp_err_t vgc_lvgl_deinit();

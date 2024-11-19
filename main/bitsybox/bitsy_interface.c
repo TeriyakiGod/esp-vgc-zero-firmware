@@ -1,4 +1,5 @@
 #include "bitsybox.h"
+#include "esp_attr.h"
 
 static const char *TAG = "BitsyAPI";
 
@@ -335,7 +336,7 @@ duk_ret_t bitsy_on_quit(duk_context *ctx)
     return 0;
 }
 
-duk_ret_t bitsy_on_update(duk_context *ctx)
+duk_ret_t IRAM_ATTR bitsy_on_update(duk_context *ctx)
 {
     duk_put_global_string(ctx, "__bitsybox_on_update__");
     return 0;
