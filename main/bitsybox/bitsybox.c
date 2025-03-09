@@ -28,7 +28,7 @@ void vBitsyEngineTask(void *pvParameters)
 
         duk_update_game_state(ctx);
         int64_t update_time = esp_timer_get_time();
-        vgc_lcd_draw_bitmap(0, 0, SCREEN_SIZE, SCREEN_SIZE, drawingBuffers[SCREEN_BUFFER_ID]);
+        vgc_lcd_draw_bitmap(0, 0, BITSY_VIDEO_SIZE, BITSY_VIDEO_SIZE, drawingBuffers[SCREEN_BUFFER_ID]);
         int64_t draw_time = esp_timer_get_time();
 
         ESP_LOGI(TAG, "Update Time: %lld ms, Draw Time: %lld ms", (update_time - start_time) / 1000, (draw_time - update_time) / 1000);

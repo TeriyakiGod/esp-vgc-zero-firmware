@@ -9,20 +9,62 @@
 #include <esp_heap_caps.h>
 #include <duktape.h>
 
-#define SYSTEM_PALETTE_MAX 256
-#define SYSTEM_DRAWING_BUFFER_MAX 1024
+// #define DEMO_MODE
+// #define TUNE_TOOL_MODE
+#define ENABLE_BITSY_LOG
 
-#define SCREEN_SIZE 128
-#define TILE_SIZE 8
-#define ROOM_SIZE 16
+#define MEMORY_BLOCK_MAX 1024
+#define PALETTE_MAX 256
+#define TEXTURE_MAX MEMORY_BLOCK_MAX
+
+// memory blocks
+#define BITSY_VIDEO 0
+#define BITSY_TEXTBOX 1
+#define BITSY_MAP1 2
+#define BITSY_MAP2 3
+#define BITSY_SOUND1 4
+#define BITSY_SOUND2 5
+
+#define BITSY_TILE_START 6
+
+// samples per second
+#define AUDIO_SAMPLE_RATE 44100
+// size of the audio buffer in samples (filled by audio callback)
+#define AUDIO_BUFFER_SIZE 256
+
+// graphics modes
+#define BITSY_GFX_VIDEO 0
+#define BITSY_GFX_MAP 1
+
+// text modes
+#define BITSY_TXT_HIREZ 0
+#define BITSY_TXT_LOREZ 1
+
+// size
+#define BITSY_TILE_SIZE 8
+#define BITSY_MAP_SIZE 16
+#define BITSY_VIDEO_SIZE 128
 #define RENDER_SCALE 1
 #define TEXTBOX_RENDER_SCALE 1
+
+// button codes
+#define BITSY_BTN_UP 0
+#define BITSY_BTN_DOWN 1
+#define BITSY_BTN_LEFT 2
+#define BITSY_BTN_RIGHT 3
+#define BITSY_BTN_OK 4
+#define BITSY_BTN_MENU 5
+
+// pulse waves
+#define BITSY_PULSE_1_8 0
+#define BITSY_PULSE_1_4 1
+#define BITSY_PULSE_1_2 2
 
 #define SCREEN_BUFFER_ID 0
 #define TEXTBOX_BUFFER_ID 1
 
-extern uint16_t systemPalette[SYSTEM_PALETTE_MAX];
-extern uint16_t *drawingBuffers[SYSTEM_DRAWING_BUFFER_MAX];
+extern uint16_t systemPalette[PALETTE_MAX];
+extern uint16_t *drawingBuffers[TEXTURE_MAX];
 
 /* INPUT */
 extern bool isButtonUp;

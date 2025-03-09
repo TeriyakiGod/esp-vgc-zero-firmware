@@ -6,8 +6,8 @@
 
 static const char *TAG = "DuktapeInterface";
 
-uint16_t systemPalette[SYSTEM_PALETTE_MAX];
-uint16_t *drawingBuffers[SYSTEM_DRAWING_BUFFER_MAX];
+uint16_t systemPalette[PALETTE_MAX];
+uint16_t *drawingBuffers[TEXTURE_MAX];
 
 static int isGameOver = 0;
 static const char *gameFilePath = "/spiflash/bitsy/games/mossland.bitsy";
@@ -124,7 +124,10 @@ bool duk_load_bitsy_engine(duk_context *ctx)
 {
     bool success = true;
     // load engine scripts
+    // TODO: Remove hardcoded paths
     const char *scripts[] = {
+        "/spiflash/bitsy/engine/world.bin",
+        "/spiflash/bitsy/engine/sound.bin",
         "/spiflash/bitsy/engine/script.bin",
         "/spiflash/bitsy/engine/font.bin",
         "/spiflash/bitsy/engine/transition.bin",
@@ -241,7 +244,7 @@ void duk_init_bitsy_system(duk_context *ctx)
 
 void duk_deinit_bitsy_system()
 {
-    for (int i = 0; i < SYSTEM_DRAWING_BUFFER_MAX; i++)
+    for (int i = 0; i < TEXTURE_MAX; i++)
     {
         if (drawingBuffers[i])
         {

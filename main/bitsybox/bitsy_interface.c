@@ -5,13 +5,60 @@ static const char *TAG = "BitsyAPI";
 
 /* GLOBALS */
 int curGraphicsMode = 0;
+int curTextMode = 0;
 
-int curBufferId = -1;
-int tileStartBufferId = 2;
-int nextBufferId = 2;
+// render scales
+int renderScale = 1;
+int textboxRenderScale = 1;
 
-int textboxWidth = 104;
-int textboxHeight = 38;
+int shouldRenderTextures = 0;
+
+// textbox state
+int isTextboxVisible = 0;
+int textboxX = 0;
+int textboxY = 0;
+int textboxWidth = 0;
+int textboxHeight = 0;
+
+/* # MEMORY */
+
+typedef struct MemoryBlock {
+	uint32_t size;
+	uint8_t* data;
+} MemoryBlock;
+
+MemoryBlock memory[MEMORY_BLOCK_MAX];
+
+void freeMemoryBlock(int block) {
+	if (memory[block].data != NULL) {
+		free(memory[block].data);
+	}
+
+	memory[block].size = -1;
+	memory[block].data = NULL;
+}
+
+void initializeMemoryBlocks() {
+	for (int i = 0; i < MEMORY_BLOCK_MAX; i++) {
+		freeMemoryBlock(i);
+	}
+}
+
+void allocateMemoryBlock(int block, uint16_t size) {
+	// free any existing memory before re-allocating it!
+	freeMemoryBlock(block);
+
+	memory[block].size = size;
+	memory[block].data = calloc(size, sizeof(uint8_t));
+}
+
+int isMemoryBlockEmpty(int block) {
+	return memory[block].size <= 0 || memory[block].data == NULL;
+}
+
+int isMemoryBlockValid(int block) {
+	return block >= 0 && block < MEMORY_BLOCK_MAX && !isMemoryBlockEmpty(block);
+}
 
 duk_ret_t bitsy_log(duk_context *ctx)
 {
@@ -19,6 +66,70 @@ duk_ret_t bitsy_log(duk_context *ctx)
     printStr = duk_safe_to_string(ctx, 0);
     ESP_LOGI(TAG, "Bitsy: %s", printStr);
     return 0;
+}
+
+int audioStep = 0; // global audio step counter for sampling
+float audioVolume = 0.0f; // global audio volume (range: 0.0 - 1.0)
+
+typedef struct PulseWave {
+	int cycle; // cycle length in sample steps
+	int duty; // duty length in sample steps
+} PulseWave;
+
+PulseWave wave(float frequency, float dutyCycle) {
+	// calculate cycle length in samples
+	float cycle = AUDIO_SAMPLE_RATE / frequency;
+	// calcualte duty lenght in samples
+	float duty = cycle * dutyCycle;
+
+	// convert cycle and duty to integer steps
+	return (PulseWave) {
+		.cycle = floor(cycle),
+		.duty = floor(duty),
+	};
+}
+
+int pulse(PulseWave* wave, int step) {
+	return (step % wave->cycle) <= wave->duty ? 1 : 0;	
+}
+
+// sound channels
+PulseWave soundChannel1;
+float volumeChannel1 = 0.0f; // volume from 0.0 - 1.0
+int durationChannel1 = 0; // duration in *samples* (not frames or ms)
+int dutyChannel1;
+
+PulseWave soundChannel2;
+float volumeChannel2 = 0.0f; // volume from 0.0 - 1.0
+int durationChannel2 = 0; // duration in *samples* (not frames or ms)
+int dutyChannel2;
+
+void audioCallback(void* userdata, uint8_t* stream, int len) {
+	float* fstream = (float*) stream;
+
+	for (int i = 0; i < AUDIO_BUFFER_SIZE; i++) {
+		// increment global audio step
+		audioStep++;
+
+		// decrement channel duration counters and mute audio when they reach zero
+		durationChannel1--;
+		if (durationChannel1 <= 0) {
+			volumeChannel1 = 0.0f;
+			durationChannel1 = 0;
+		}
+
+		durationChannel2--;
+		if (durationChannel2 <= 0) {
+			volumeChannel2 = 0.0f;
+			durationChannel2 = 0;
+		}
+
+		// calculate pulse wave sample for channel 1
+		fstream[(i * 2) + 0] = pulse(&soundChannel1, audioStep) * volumeChannel1 * audioVolume;
+
+		// calculate pulse wave sample for channel 2
+		fstream[(i * 2) + 1] = pulse(&soundChannel2, audioStep) * volumeChannel2 * audioVolume;
+	}
 }
 
 duk_ret_t bitsy_get_button(duk_context *ctx)
@@ -51,10 +162,53 @@ duk_ret_t bitsy_get_button(duk_context *ctx)
     return 1;
 }
 
-duk_ret_t bitsy_set_graphics_mode(duk_context *ctx)
-{
-    curGraphicsMode = duk_get_int(ctx, 0);
-    return 0;
+duk_ret_t bitsy_get_gamedata(duk_context* ctx) {
+	duk_peval_string(ctx, "__bitsybox_game_data__");
+
+	return 1;
+}
+
+duk_ret_t bitsy_get_fontdata(duk_context* ctx) {
+	duk_peval_string(ctx, "__bitsybox_default_font__");
+
+	return 1;
+}
+
+duk_ret_t bitsyGraphicsMode(duk_context* ctx) {
+	// set the graphics mode if there is an input mode
+	if (duk_get_top(ctx) >= 1) {
+		int prevGraphicsMode = curGraphicsMode;
+		curGraphicsMode = duk_get_int(ctx, 0);
+
+		if (curGraphicsMode != prevGraphicsMode) {
+			shouldRenderTextures = 1;
+		}
+	}
+
+	// return the current graphics mode
+	duk_push_int(ctx, curGraphicsMode);
+
+	return 1;
+}
+
+duk_ret_t bitsyTextMode(duk_context* ctx) {
+	// set the text mode if there is an input mode
+	if (duk_get_top(ctx) >= 1) {
+		int prevTextMode =  curTextMode;
+		curTextMode = duk_get_int(ctx, 0);
+
+		// update the textbox render scale
+		textboxRenderScale = (curTextMode == BITSY_TXT_LOREZ) ? 4 : 2;
+
+		if (curTextMode != prevTextMode) {
+			shouldRenderTextures = 1;
+		}
+	}
+
+	// return the current text mode
+	duk_push_int(ctx, curTextMode);
+
+	return 1;
 }
 
 duk_ret_t bitsy_set_color(duk_context *ctx)
@@ -73,18 +227,10 @@ duk_ret_t bitsy_set_color(duk_context *ctx)
     color = (color >> 8) | (color << 8);
 
     systemPalette[paletteIndex] = color;
+    shouldRenderTextures = 1;
     return 0;
 }
 
-duk_ret_t bitsy_reset_colors(duk_context *ctx)
-{
-    for (int i = 0; i < SYSTEM_PALETTE_MAX; i++)
-    {
-        systemPalette[i] = 0;
-    }
-    ESP_LOGI(TAG, "Reset colors");
-    return 0;
-}
 
 duk_ret_t bitsy_draw_begin(duk_context *ctx)
 {
@@ -263,7 +409,7 @@ duk_ret_t bitsy_clear(duk_context *ctx)
 
 duk_ret_t bitsy_add_tile(duk_context *ctx)
 {
-    if (nextBufferId >= SYSTEM_DRAWING_BUFFER_MAX)
+    if (nextBufferId >= TEXTURE_MAX)
     {
         // todo : error handling?
         return 0;
